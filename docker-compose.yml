@@ -1,0 +1,58 @@
+version: "3.9"
+
+services:
+
+  mysql:
+    image: mysql:8.4
+    container_name: telemetria-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: telemetria
+      MYSQL_USER: telemetria
+      MYSQL_PASSWORD: telemetria
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - telemetria-network
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: telemetria-phpmyadmin
+    restart: always
+    depends_on:
+      - mysql
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: root
+    networks:
+      - telemetria-network
+
+  app:
+    build: .
+    container_name: telemetria-app
+    restart: always
+    depends_on:
+      - mysql
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/telemetria?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: telemetria
+      SPRING_DATASOURCE_PASSWORD: telemetria
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      SPRING_FLYWAY_ENABLED: true
+    networks:
+      - telemetria-network
+
+volumes:
+  mysql_data:
+
+networks:
+  telemetria-network:
