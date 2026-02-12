@@ -1,14 +1,12 @@
 package com.app.telemetria.security;
 
 import java.io.IOException;
-import java.util.List;
 
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.*;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
@@ -39,13 +37,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         String token = authHeader.substring(7);
-        String username = jwtService.extractUsername(token);
+        String login = jwtService.getLogin(token); // <--- usando o método correto
 
-        if (username != null &&
+        if (login != null &&
                 SecurityContextHolder.getContext().getAuthentication() == null) {
 
             UserDetails userDetails =
-                    userDetailsService.loadUserByUsername(username);
+                    userDetailsService.loadUserByUsername(login);
 
             if (jwtService.isTokenValid(token)) {
 

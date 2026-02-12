@@ -23,10 +23,11 @@ public class AuthController {
     @Autowired
     private UsuarioRepository usuarioRepository;
 
+    // ================= LOGIN =================
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(
-            @RequestBody AuthRequest request) {
+    public ResponseEntity<AuthResponse> login(@RequestBody AuthRequest request) {
 
+        // Autenticação do usuário
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         request.getLogin(),
@@ -34,12 +35,34 @@ public class AuthController {
                 )
         );
 
-        Usuario usuario = usuarioRepository
-                .findByLogin(request.getLogin())
+        Usuario usuario = usuarioRepository.findByLogin(request.getLogin())
                 .orElseThrow();
 
-        String token = jwtService.generateToken(usuario);
+        // Gera tokens
+        String accessToken = jwtService.generateAccessToken(usuario);
+        String refreshToken = jwtService.generateRefreshToken(usuario);
 
-        return ResponseEntity.ok(new AuthResponse(token));
+        return ResponseEntity.ok(new AuthResponse(accessToken, refreshToken));
+    }
+
+    // ================= REFRESH TOKEN =================
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthResponse> refresh(@RequestBody RefreshTokenRequest request) {
+
+        String refreshToken = request.getRefreshToken();
+
+        // Valida refresh token
+        if (!jwtService.isTokenValid(refreshToken)) {
+            return ResponseEntity.status(403).build();
+        }
+
+        String login = jwtService.getLogin(refreshToken);
+        Usuario usuario = usuarioRepository.findByLogin(login).orElseThrow();
+
+        // Gera novos tokens
+        String newAccessToken = jwtService.generateAccessToken(usuario);
+        String newRefreshToken = jwtService.generateRefreshToken(usuario);
+
+        return ResponseEntity.ok(new AuthResponse(newAccessToken, newRefreshToken));
     }
 }
