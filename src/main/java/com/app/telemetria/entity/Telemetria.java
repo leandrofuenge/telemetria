@@ -2,6 +2,8 @@ package com.app.telemetria.entity;
 
 import java.time.LocalDateTime;
 import jakarta.persistence.*;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 @Entity
 @Table(name = "telemetria")
@@ -12,10 +14,10 @@ public class Telemetria {
     private Long id;
 
     @ManyToOne
-    @JoinColumn(name = "veiculo_id")
+    @JoinColumn(name = "veiculo_id", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private Veiculo veiculo;
 
-    // --- Localização e Movimento ---
     private Double latitude;
     private Double longitude;
     private Double velocidade;
@@ -27,7 +29,6 @@ public class Telemetria {
     private Double aceleracao;
     private Double inclinacao;
 
-    // --- Sensores de Estado ---
     private Boolean ignicao;
     private Double nivelCombustivel;
     private Double temperaturaMotor;
@@ -37,7 +38,6 @@ public class Telemetria {
     private Double cargaMotor;
     private Double torqueMotor;
 
-    // --- Comportamento ---
     private Double rpm;
     private Boolean frenagemBrusca;
     private Integer numeroFrenagens;
@@ -46,25 +46,21 @@ public class Telemetria {
     private Integer tempoMotorLigado;
     private Integer tempoOcioso;
 
-    // --- Eventos e Segurança ---
     private Boolean colisaoDetectada;
     private Boolean excessoVelocidade;
     private Boolean geofenceViolada;
     private Boolean cintoSeguranca;
     private Boolean portaAberta;
 
-    // --- Dados Ambientais ---
     private Double temperaturaExterna;
     private Double umidadeExterna;
     private Boolean chuvaDetectada;
 
-    // --- Dados do Dispositivo ---
     private Double sinalGsm;
     private Double sinalGps;
     private String firmwareVersao;
     private String imeiDispositivo;
 
-    // --- Manutenção ---
     private Boolean manutencaoPendente;
     private LocalDateTime proximaRevisao;
     private Double horasMotor;
@@ -72,11 +68,8 @@ public class Telemetria {
 
     private LocalDateTime dataHora;
 
-    // Construtor padrão
-    public Telemetria() {
-    }
+    public Telemetria() {}
 
-    // --- Getters e Setters ---
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }

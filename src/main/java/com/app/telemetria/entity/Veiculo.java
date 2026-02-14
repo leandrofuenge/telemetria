@@ -18,51 +18,23 @@ public class Veiculo {
     private String modelo;
     private Double capacidadeCarga;
 
-    @OneToMany(mappedBy = "veiculo", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "veiculo", fetch = FetchType.LAZY)
     private List<Telemetria> historicoTelemetria = new ArrayList<>();
 
-    // Construtor Padrão (Obrigatório para o JPA)
-    public Veiculo() {
-    }
+    public Veiculo() {}
 
-    // Getters e Setters
-    public Long getId() {
-        return id;
-    }
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+    public String getPlaca() { return placa; }
+    public void setPlaca(String placa) { this.placa = placa; }
 
-    public String getPlaca() {
-        return placa;
-    }
+    public String getModelo() { return modelo; }
+    public void setModelo(String modelo) { this.modelo = modelo; }
 
-    public void setPlaca(String placa) {
-        this.placa = placa;
-    }
+    public Double getCapacidadeCarga() { return capacidadeCarga; }
+    public void setCapacidadeCarga(Double capacidadeCarga) { this.capacidadeCarga = capacidadeCarga; }
 
-    public String getModelo() {
-        return modelo;
-    }
-
-    public void setModelo(String modelo) {
-        this.modelo = modelo;
-    }
-
-    public Double getCapacidadeCarga() {
-        return capacidadeCarga;
-    }
-
-    public void setCapacidadeCarga(Double capacidadeCarga) {
-        this.capacidadeCarga = capacidadeCarga;
-    }
-
-    public List<Telemetria> getHistoricoTelemetria() {
-        return historicoTelemetria;
-    }
-
-    public void setHistoricoTelemetria(List<Telemetria> historicoTelemetria) {
-        this.historicoTelemetria = historicoTelemetria;
-    }
+    public List<Telemetria> getHistoricoTelemetria() { return historicoTelemetria; }
+    public void setHistoricoTelemetria(List<Telemetria> historicoTelemetria) { this.historicoTelemetria = historicoTelemetria; }
 }

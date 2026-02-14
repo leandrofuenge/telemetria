@@ -35,8 +35,10 @@ public class SecurityConfig {
                         .hasAnyRole("ADMIN", "GESTOR")
                     .requestMatchers("/operador/**")
                         .hasAnyRole("ADMIN", "GESTOR", "OPERADOR")
-                    .requestMatchers("/motorista/**")
-                        .hasRole("MOTORISTA")
+                    .requestMatchers("/motoristas/**")
+                        .hasAnyRole("ADMIN","MOTORISTA")
+                    .requestMatchers("/veiculos/**")
+                        .hasRole("ADMIN")
                     .anyRequest().authenticated()
             )
             .addFilterBefore(jwtFilter,
