@@ -6,25 +6,29 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.NotBlank;
 
 @Entity
 @Table(name = "motoristas")
 public class Motorista {
 
-    @Id
+	@Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(nullable = false)
+    
+    @NotBlank(message = "Nome é obrigatório")
     private String nome;
-
-    @Column(unique = true)
+    
+    @NotBlank(message = "CPF é obrigatório")
     private String cpf;
-
+    
+    @NotBlank(message = "CNH é obrigatória")
     private String cnh;
+    
+    @NotBlank(message = "Categoria da CNH é obrigatória")
+    @Column(name = "categoria_cnh")
     private String categoriaCnh;
 
-    // Construtor Padrão (Obrigatório para o JPA)
     public Motorista() {
     }
 

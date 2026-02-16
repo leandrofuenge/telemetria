@@ -17,7 +17,6 @@ public class Carga {
     @JoinColumn(name = "cliente_id")
     private Cliente cliente;
 
-    // Construtor padrão obrigatório para o JPA
     public Carga() {
     }
 

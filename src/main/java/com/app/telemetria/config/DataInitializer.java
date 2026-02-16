@@ -21,14 +21,14 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
 
-        // Verifica se o usuário admin já existe
         if (usuarioRepository.findByLogin("admin").isEmpty()) {
             Usuario admin = new Usuario();
             admin.setLogin("admin");
-            // Senha "123456" criptografada
+
             admin.setSenha(passwordEncoder.encode("123456"));
             admin.setNome("Administrador");
-            admin.setPerfil(Perfil.ADMIN); // <-- Usa o enum corretamente
+            admin.setPerfil(Perfil.ADMIN); 
+            admin.setEmail("admin@telemetria.com"); 
             usuarioRepository.save(admin);
 
             System.out.println("Usuário ADMIN criado com login: admin / senha: 123456");

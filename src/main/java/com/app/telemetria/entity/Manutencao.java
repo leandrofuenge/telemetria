@@ -20,7 +20,6 @@ public class Manutencao {
     private Double custo;
     private String tipo; // Preventiva ou Corretiva
 
-    // Construtor padrão (Obrigatório para o JPA)
     public Manutencao() {
     }
 

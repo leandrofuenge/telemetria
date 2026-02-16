@@ -27,7 +27,6 @@ public class Viagem {
     private LocalDateTime dataChegadaPrevista;
     private String status; // Ex: EM_TRANSITO, FINALIZADA
 
-    // Construtor Padrão (Obrigatório para o JPA)
     public Viagem() {
     }
 

@@ -13,7 +13,6 @@ public class Cliente {
     private String nomeRazaoSocial;
     private String cnpj;
 
-    // Construtor padrão obrigatório para o JPA
     public Cliente() {
     }
 
