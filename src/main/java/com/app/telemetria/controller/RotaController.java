@@ -8,7 +8,7 @@ import com.app.telemetria.entity.Rota;
 import com.app.telemetria.service.RotaService;
 
 @RestController
-@RequestMapping("/rotas")
+@RequestMapping("/api/v1/rotas")
 public class RotaController {
     
     private final RotaService service;

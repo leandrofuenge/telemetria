@@ -2,6 +2,10 @@ package com.app.telemetria.entity;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
+import com.app.telemetria.util.PontoRotaConverter;
 
 @Entity
 @Table(name = "rotas")
@@ -35,6 +39,14 @@ public class Rota {
     
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+    
+    @Convert(converter = PontoRotaConverter.class)
+    @Column(name = "pontos_rota", columnDefinition = "JSON")
+    private List<PontoRota> pontosRota = new ArrayList<>();
+    
+    @Column(nullable = false)
+    private String status; // "PLANEJADA", "EM_ANDAMENTO", "FINALIZADA", "CANCELADA"
+
     
     // ========= GETTERS E SETTERS =========
     
@@ -165,4 +177,16 @@ public class Rota {
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }
+    
+    public List<PontoRota> getPontosRota() { return pontosRota; }
+    
+    public void setPontosRota(List<PontoRota> pontosRota) { this.pontosRota = pontosRota; }
+    
+ // Getters e Setters
+    public String getStatus() { return status; }
+    
+    public void setStatus(String status) { this.status = status; }
+    
 }
+
+

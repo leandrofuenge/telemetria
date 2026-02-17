@@ -10,7 +10,7 @@ import com.app.telemetria.entity.Motorista;
 import com.app.telemetria.service.MotoristaService;
 
 @RestController
-@RequestMapping("/motoristas")
+@RequestMapping("/api/v1/motoristas")
 public class MotoristaController {
 
     @Autowired

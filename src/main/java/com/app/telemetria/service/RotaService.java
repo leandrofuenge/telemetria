@@ -4,7 +4,7 @@ import java.util.List;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional; // <-- IMPORTANTE
+import org.springframework.transaction.annotation.Transactional;
 
 import com.app.telemetria.entity.Rota;
 import com.app.telemetria.entity.Veiculo;
@@ -37,6 +37,11 @@ public class RotaService {
             throw new RotaValidationException("Origem e destino são obrigatórios");
         }
         
+        // Define status padrão se não informado
+        if (rota.getStatus() == null) {
+            rota.setStatus("PLANEJADA");
+        }
+        
         try {
             return repository.save(rota);
         } catch (DataIntegrityViolationException e) {
@@ -62,6 +67,7 @@ public class RotaService {
     public Rota atualizar(Long id, Rota dados) {
         Rota rota = buscarPorId(id);
         
+        // Atualiza campos básicos
         if (dados.getNome() != null) {
             rota.setNome(dados.getNome());
         }
@@ -99,6 +105,28 @@ public class RotaService {
             rota.setDataFim(dados.getDataFim());
         }
         
+        // =========================================
+        // ATUALIZA O STATUS DA ROTA
+        // =========================================
+        if (dados.getStatus() != null) {
+            rota.setStatus(dados.getStatus());
+            
+            // Lógica adicional baseada no status
+            switch (dados.getStatus()) {
+                case "EM_ANDAMENTO":
+                    if (rota.getDataInicio() == null) {
+                        rota.setDataInicio(java.time.LocalDateTime.now());
+                    }
+                    break;
+                case "FINALIZADA":
+                case "CANCELADA":
+                    if (rota.getDataFim() == null) {
+                        rota.setDataFim(java.time.LocalDateTime.now());
+                    }
+                    break;
+            }
+        }
+        
         // Atualiza o veículo se veiculoId foi fornecido
         if (dados.getVeiculo() != null && dados.getVeiculo().getId() != null) {
             Veiculo veiculo = veiculoRepository.findById(dados.getVeiculo().getId())
@@ -120,5 +148,38 @@ public class RotaService {
     public void deletar(Long id) {
         Rota rota = buscarPorId(id);
         repository.delete(rota);
+    }
+    
+    // =========================================
+    // MÉTODOS ADICIONAIS PARA GERENCIAR STATUS
+    // =========================================
+    
+    @Transactional
+    public Rota iniciarRota(Long id) {
+        Rota rota = buscarPorId(id);
+        rota.setStatus("EM_ANDAMENTO");
+        rota.setDataInicio(java.time.LocalDateTime.now());
+        return repository.save(rota);
+    }
+    
+    @Transactional
+    public Rota finalizarRota(Long id) {
+        Rota rota = buscarPorId(id);
+        rota.setStatus("FINALIZADA");
+        rota.setDataFim(java.time.LocalDateTime.now());
+        return repository.save(rota);
+    }
+    
+    @Transactional
+    public Rota cancelarRota(Long id) {
+        Rota rota = buscarPorId(id);
+        rota.setStatus("CANCELADA");
+        rota.setDataFim(java.time.LocalDateTime.now());
+        return repository.save(rota);
+    }
+    
+    @Transactional(readOnly = true)
+    public List<Rota> listarPorStatus(String status) {
+        return repository.findByStatus(status);
     }
 }

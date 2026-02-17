@@ -11,7 +11,7 @@ import com.app.telemetria.repository.UsuarioRepository;
 import com.app.telemetria.security.JwtService;
 
 @RestController
-@RequestMapping("/auth")
+@RequestMapping("/api/v1/auth")
 public class AuthController {
 
     @Autowired

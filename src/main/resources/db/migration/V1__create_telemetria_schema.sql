@@ -98,7 +98,7 @@ CREATE TABLE cargas (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =========================================
--- TABELA: rotas
+-- TABELA: rotas (COMPLETA)
 -- =========================================
 CREATE TABLE rotas (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -115,14 +115,39 @@ CREATE TABLE rotas (
     data_inicio DATETIME,
     data_fim DATETIME,
     veiculo_id BIGINT,
+    
+    -- STATUS DA ROTA
+    status VARCHAR(50) NOT NULL DEFAULT 'PLANEJADA' 
+        COMMENT 'PLANEJADA, EM_ANDAMENTO, FINALIZADA, CANCELADA',
+    
+    -- CONFIGURAÇÕES DE DESVIO
+    tolerancia_desvio DOUBLE DEFAULT 100.0 
+        COMMENT 'Tolerância em metros antes de considerar desvio',
+    threshold_desvio DOUBLE DEFAULT 50.0 
+        COMMENT 'Distância para disparar alerta de desvio',
+    
+    -- DADOS GEOGRÁFICOS DA ROTA
+    rota_geojson JSON 
+        COMMENT 'Rota completa em formato GeoJSON (polyline)',
+    pontos_rota JSON 
+        COMMENT 'Lista de pontos que formam a rota para cálculos de desvio',
+    
+    -- TIMESTAMPS
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    -- CHAVES ESTRANGEIRAS
     CONSTRAINT fk_rota_veiculo
         FOREIGN KEY (veiculo_id)
         REFERENCES veiculos(id)
         ON DELETE SET NULL,
+    
+    -- ÍNDICES
     INDEX idx_rota_veiculo (veiculo_id),
-    INDEX idx_rota_ativa (ativa)
+    INDEX idx_rota_ativa (ativa),
+    INDEX idx_rota_status (status),
+    INDEX idx_rota_datas (data_inicio, data_fim)
+    
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =========================================
@@ -313,6 +338,37 @@ CREATE TABLE geofences (
     ativo BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_geofence_localizacao (latitude_centro, longitude_centro)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- TABELA: desvios_rota
+-- =========================================
+CREATE TABLE desvios_rota (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    rota_id BIGINT NOT NULL,
+    veiculo_id BIGINT NOT NULL,
+    latitude_desvio DOUBLE NOT NULL,
+    longitude_desvio DOUBLE NOT NULL,
+    distancia_desvio DOUBLE NOT NULL COMMENT 'Distância do desvio em metros',
+    data_hora_desvio DATETIME NOT NULL,
+    resolvido BOOLEAN DEFAULT FALSE,
+    data_hora_retorno DATETIME,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_desvio_rota
+        FOREIGN KEY (rota_id)
+        REFERENCES rotas(id)
+        ON DELETE CASCADE,
+        
+    CONSTRAINT fk_desvio_veiculo
+        FOREIGN KEY (veiculo_id)
+        REFERENCES veiculos(id)
+        ON DELETE CASCADE,
+        
+    INDEX idx_desvio_rota (rota_id),
+    INDEX idx_desvio_veiculo (veiculo_id),
+    INDEX idx_desvio_resolvido (resolvido),
+    INDEX idx_desvio_data (data_hora_desvio)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =========================================
