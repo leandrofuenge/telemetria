@@ -4,6 +4,7 @@ import com.app.telemetria.entity.Telemetria;
 import com.app.telemetria.entity.Veiculo;
 import com.app.telemetria.repository.TelemetriaRepository;
 import com.app.telemetria.repository.VeiculoRepository;
+import com.app.telemetria.service.AlertaService;
 import com.app.telemetria.exception.VeiculoNotFoundException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.HttpStatus;
@@ -18,12 +19,15 @@ public class TelemetriaController {
     
     private final TelemetriaRepository telemetriaRepository;
     private final VeiculoRepository veiculoRepository;
+    private final AlertaService alertaService;  
     
     public TelemetriaController(
             TelemetriaRepository telemetriaRepository,
-            VeiculoRepository veiculoRepository) {
+            VeiculoRepository veiculoRepository,
+            AlertaService alertaService) {  
         this.telemetriaRepository = telemetriaRepository;
         this.veiculoRepository = veiculoRepository;
+        this.alertaService = alertaService;
     }
     
     @PostMapping
@@ -38,11 +42,16 @@ public class TelemetriaController {
         telemetria.setLatitude(request.getLatitude());
         telemetria.setLongitude(request.getLongitude());
         telemetria.setVelocidade(request.getVelocidade());
+        telemetria.setNivelCombustivel(request.getNivelCombustivel()); 
         telemetria.setDataHora(request.getDataHora() != null ? 
             request.getDataHora() : LocalDateTime.now());
         
-        // Salvar
+        // Salvar telemetria
         Telemetria saved = telemetriaRepository.save(telemetria);
+        
+        // ===== GERAR ALERTAS BASEADO NA TELEMETRIA =====
+        alertaService.processarTelemetria(saved);
+        
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
     
@@ -82,6 +91,7 @@ public class TelemetriaController {
         private Double latitude;
         private Double longitude;
         private Double velocidade;
+        private Double nivelCombustivel;  
         private LocalDateTime dataHora;
         
         // Getters e Setters
@@ -96,6 +106,9 @@ public class TelemetriaController {
         
         public Double getVelocidade() { return velocidade; }
         public void setVelocidade(Double velocidade) { this.velocidade = velocidade; }
+        
+        public Double getNivelCombustivel() { return nivelCombustivel; }  // NOVO
+        public void setNivelCombustivel(Double nivelCombustivel) { this.nivelCombustivel = nivelCombustivel; }
         
         public LocalDateTime getDataHora() { return dataHora; }
         public void setDataHora(LocalDateTime dataHora) { this.dataHora = dataHora; }

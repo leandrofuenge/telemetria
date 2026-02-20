@@ -176,6 +176,9 @@ CREATE TABLE manutencoes (
 -- =========================================
 -- TABELA: viagens
 -- =========================================
+-- =========================================
+-- TABELA: viagens (COMPLETA)
+-- =========================================
 CREATE TABLE viagens (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     veiculo_id BIGINT,
@@ -183,32 +186,41 @@ CREATE TABLE viagens (
     carga_id BIGINT,
     rota_id BIGINT,
     data_saida DATETIME,
+    data_inicio DATETIME COMMENT 'Momento efetivo em que a viagem começou',
     data_chegada_prevista DATETIME,
     data_chegada_real DATETIME,
-    status VARCHAR(50) DEFAULT 'PLANEJADA',
+    status VARCHAR(50) DEFAULT 'PLANEJADA' 
+        COMMENT 'PLANEJADA, EM_ANDAMENTO, FINALIZADA, CANCELADA',
     observacoes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
     CONSTRAINT fk_viagem_veiculo
         FOREIGN KEY (veiculo_id)
         REFERENCES veiculos(id)
         ON DELETE SET NULL,
+        
     CONSTRAINT fk_viagem_motorista
         FOREIGN KEY (motorista_id)
         REFERENCES motoristas(id)
         ON DELETE SET NULL,
+        
     CONSTRAINT fk_viagem_carga
         FOREIGN KEY (carga_id)
         REFERENCES cargas(id)
         ON DELETE SET NULL,
+        
     CONSTRAINT fk_viagem_rota
         FOREIGN KEY (rota_id)
         REFERENCES rotas(id)
         ON DELETE SET NULL,
+        
     INDEX idx_viagem_veiculo (veiculo_id),
     INDEX idx_viagem_motorista (motorista_id),
     INDEX idx_viagem_status (status),
-    INDEX idx_viagem_datas (data_saida, data_chegada_prevista)
+    INDEX idx_viagem_datas (data_saida, data_chegada_prevista),
+    INDEX idx_viagem_inicio (data_inicio)
+    
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =========================================
@@ -300,28 +312,43 @@ CREATE TABLE alertas (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     veiculo_id BIGINT,
     motorista_id BIGINT,
+    viagem_id BIGINT,
     tipo VARCHAR(50) NOT NULL,
-    gravidade VARCHAR(50) DEFAULT 'MEDIA',
+    gravidade VARCHAR(20) NOT NULL,
     mensagem TEXT,
     latitude DOUBLE,
     longitude DOUBLE,
     velocidade DOUBLE,
-    lido BOOLEAN DEFAULT FALSE,
-    resolvido BOOLEAN DEFAULT FALSE,
+    odometro DOUBLE,
     data_hora DATETIME NOT NULL,
+    lido BOOLEAN DEFAULT FALSE,
+    data_hora_leitura DATETIME,
+    resolvido BOOLEAN DEFAULT FALSE,
+    data_hora_resolucao DATETIME,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
     CONSTRAINT fk_alerta_veiculo
         FOREIGN KEY (veiculo_id)
         REFERENCES veiculos(id)
-        ON DELETE CASCADE,
+        ON DELETE SET NULL,
+        
     CONSTRAINT fk_alerta_motorista
         FOREIGN KEY (motorista_id)
         REFERENCES motoristas(id)
         ON DELETE SET NULL,
+        
+    CONSTRAINT fk_alerta_viagem
+        FOREIGN KEY (viagem_id)
+        REFERENCES viagens(id)
+        ON DELETE SET NULL,
+        
     INDEX idx_alerta_veiculo (veiculo_id),
+    INDEX idx_alerta_motorista (motorista_id),
+    INDEX idx_alerta_viagem (viagem_id),
     INDEX idx_alerta_data (data_hora),
-    INDEX idx_alerta_tipo (tipo),
-    INDEX idx_alerta_lido (lido)
+    INDEX idx_alerta_lido (lido),
+    INDEX idx_alerta_resolvido (resolvido),
+    INDEX idx_alerta_gravidade (gravidade)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =========================================

@@ -23,7 +23,7 @@ public class VeiculoController {
 
     @GetMapping
     public List<VeiculoDTO> listar() {
-        return service.listar();
+        return service.listarTodos();
     }
 
     @GetMapping("/{id}")

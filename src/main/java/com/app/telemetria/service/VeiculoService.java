@@ -20,7 +20,7 @@ public class VeiculoService {
         return toDTO(salvo);
     }
 
-    public List<VeiculoDTO> listar() {
+    public List<VeiculoDTO> listarTodos() {
         return repository.findAll()
                 .stream()
                 .map(this::toDTO)
