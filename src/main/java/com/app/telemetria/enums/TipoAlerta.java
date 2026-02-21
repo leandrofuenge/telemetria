@@ -32,8 +32,15 @@ public enum TipoAlerta {
     
     // Manutenção
     MANUTENCAO_PROXIMA("Manutenção próxima"),
-    MANUTENCAO_ATRASADA("Manutenção atrasada");
+    MANUTENCAO_ATRASADA("Manutenção atrasada"),
 
+	DISCREPANCIA_LOCALIZACAO("Discrepância entre IP e GPS"),
+	LOCALIZACAO_INESPERADA("Localização diferente da rota planejada"),
+	PROXY_DETECTADO("Uso de proxy/VPN detectado"),
+	ACESSO_EXTERIOR("Acesso de fora do país"),
+	LOCALIZACAO_DESCONHECIDA("Localização não pôde ser determinada");
+	
+	
     private final String descricao;
 
     TipoAlerta(String descricao) {

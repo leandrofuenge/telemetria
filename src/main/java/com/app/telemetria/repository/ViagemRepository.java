@@ -28,4 +28,14 @@ public interface ViagemRepository extends JpaRepository<Viagem, Long> {
     
     @Query("SELECT COUNT(v) FROM Viagem v WHERE v.status = :status")
     long countByStatus(@Param("status") String status);
+    
+    Optional<Viagem> findByVeiculoIdAndStatus(Long veiculoId, String status);
+    
+    // Outros métodos úteis
+    Optional<Viagem> findByVeiculoIdAndStatusOrderByDataInicioDesc(Long veiculoId, String status);
+    
+    
+    Optional<Viagem> findByMotoristaIdAndStatus(Long motoristaId, String status); 
+    
 }
+    

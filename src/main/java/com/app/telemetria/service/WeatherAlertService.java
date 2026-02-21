@@ -1,0 +1,287 @@
+package com.app.telemetria.service;
+
+import com.app.telemetria.entity.Alerta;
+import com.app.telemetria.entity.Veiculo;
+import com.app.telemetria.entity.Viagem;
+import com.app.telemetria.repository.AlertaRepository;
+import com.app.telemetria.repository.VeiculoRepository;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
+import java.time.LocalDateTime;
+import java.time.Duration;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+@Service
+public class WeatherAlertService {
+    
+    private final WebClient webClient;
+    private final AlertaRepository alertaRepository;
+    private final VeiculoRepository veiculoRepository;
+    private final Map<Long, LocalDateTime> ultimoAlertaPorVeiculo = new HashMap<>();
+    
+    @Value("${openweather.api.key}")
+    private String apiKey;
+    
+    // ========== CONSTRUTOR CORRIGIDO ==========
+    public WeatherAlertService(AlertaRepository alertaRepository, VeiculoRepository veiculoRepository) {
+        this.alertaRepository = alertaRepository;
+        this.veiculoRepository = veiculoRepository;
+        this.webClient = WebClient.builder()
+            .baseUrl("https://api.openweathermap.org/data/2.5")
+            .build();
+    }
+    
+    // ========== ENUMS PARA ORGANIZAR TUDO ==========
+    
+    private enum CondicaoClimatica {
+        CHUVA_FRACA(500, "Chuva fraca", "🌧️", "MEDIA"),
+        CHUVA_MODERADA(501, "Chuva moderada", "🌧️", "MEDIA"),
+        CHUVA_FORTE(502, "Chuva forte", "🌧️⚠️", "ALTA"),
+        CHUVA_MUITO_FORTE(503, "Chuva muito forte", "🌧️⚠️", "ALTA"),
+        CHUVA_EXTREMA(504, "Chuva extrema", "🌧️⛔", "CRITICA"),
+        
+        NEVE_FRACA(600, "Neve fraca", "❄️", "MEDIA"),
+        NEVE_MODERADA(601, "Neve moderada", "❄️", "MEDIA"),
+        NEVE_FORTE(602, "Neve forte", "❄️⚠️", "ALTA"),
+        
+        TEMPESTADE(200, "Tempestade", "⛈️", "ALTA"),
+        NEBLINA(741, "Nevoeiro", "🌫️", "MEDIA"),
+        FUMAÇA(711, "Fumaça", "🔥", "MEDIA"),
+        POEIRA(761, "Poeira", "💨", "MEDIA");
+        
+        final int codigo;
+        final String descricao;
+        final String icone;
+        final String gravidadePadrao;
+        
+        CondicaoClimatica(int codigo, String descricao, String icone, String gravidade) {
+            this.codigo = codigo;
+            this.descricao = descricao;
+            this.icone = icone;
+            this.gravidadePadrao = gravidade;
+        }
+        
+        static Optional<CondicaoClimatica> fromCodigo(int codigo) {
+            return Arrays.stream(values())
+                .filter(c -> c.codigo == codigo)
+                .findFirst();
+        }
+    }
+    
+    private enum FaixaTemperatura {
+        MUITO_QUENTE(t -> t > 35, "🔥 Temperatura muito alta!", "ALTA"),
+        QUENTE(t -> t > 30, "🌡️ Temperatura elevada", "BAIXA"),
+        FRIO(t -> t < 5, "❄️ Temperatura baixa", "MEDIA"),
+        CONGELANTE(t -> t < 0, "⛔ Temperatura congelante!", "ALTA");
+        
+        final java.util.function.DoublePredicate condicao;
+        final String mensagem;
+        final String gravidade;
+        
+        FaixaTemperatura(java.util.function.DoublePredicate condicao, String mensagem, String gravidade) {
+            this.condicao = condicao;
+            this.mensagem = mensagem;
+            this.gravidade = gravidade;
+        }
+        
+        static Optional<FaixaTemperatura> fromTemperatura(double temp) {
+            return Arrays.stream(values())
+                .filter(f -> f.condicao.test(temp))
+                .findFirst();
+        }
+    }
+    
+    private enum FaixaVento {
+        VENTO_FORTE(v -> v > 50, "💨 VENTO FORTE! Segure firme!", "ALTA"),
+        VENTO_MODERADO(v -> v > 30, "💨 Vento moderado", "MEDIA");
+        
+        final java.util.function.DoublePredicate condicao;
+        final String mensagem;
+        final String gravidade;
+        
+        FaixaVento(java.util.function.DoublePredicate condicao, String mensagem, String gravidade) {
+            this.condicao = condicao;
+            this.mensagem = mensagem;
+            this.gravidade = gravidade;
+        }
+        
+        static Optional<FaixaVento> fromVelocidade(double kmh) {
+            return Arrays.stream(values())
+                .filter(f -> f.condicao.test(kmh))
+                .findFirst();
+        }
+    }
+    
+    // ========== MODELO DA RESPOSTA ==========
+    
+    public record WeatherResponse(
+        Weather[] weather,
+        Main main,
+        Wind wind,
+        Rain rain,
+        Snow snow,
+        Clouds clouds
+    ) {
+        public record Weather(int id, String main, String description, String icon) {}
+        public record Main(double temp, int humidity) {}
+        public record Wind(double speed, double gust) {}
+        public record Rain(double _1h, double _3h) {}
+        public record Snow(double _1h, double _3h) {}
+        public record Clouds(int all) {}
+    }
+    
+    // ========== MÉTODO PRINCIPAL ==========
+    
+    public void verificarClimaParaVeiculo(Long veiculoId, Double latitude, Double longitude, Viagem viagem) {
+        if (latitude == null || longitude == null) return;
+        
+        // Verificar limite de 1 hora
+        if (ultimoAlertaPorVeiculo.getOrDefault(veiculoId, LocalDateTime.MIN)
+            .plusHours(1).isAfter(LocalDateTime.now())) {
+            return;
+        }
+        
+        veiculoRepository.findById(veiculoId).ifPresent(veiculo -> {
+            getWeatherForLocation(latitude, longitude).subscribe(weather -> {
+                String mensagem = gerarMensagemClimatica(weather);
+                String gravidade = determinarGravidade(weather);
+                
+                criarAlertaClimatico(veiculo, viagem, mensagem, gravidade);
+                ultimoAlertaPorVeiculo.put(veiculoId, LocalDateTime.now());
+            });
+        });
+    }
+    
+    private String gerarMensagemClimatica(WeatherResponse weather) {
+        List<String> partes = new ArrayList<>();
+        
+        // Condição principal
+        Optional.ofNullable(weather.weather())
+            .filter(w -> w.length > 0)
+            .map(w -> w[0])
+            .ifPresent(w -> {
+                CondicaoClimatica.fromCodigo(w.id())
+                    .ifPresentOrElse(
+                        c -> partes.add(String.format("%s %s", c.icone, c.descricao)),
+                        () -> partes.add(String.format("☁️ %s", w.description()))
+                    );
+            });
+        
+        // Temperatura
+        Optional.ofNullable(weather.main())
+            .ifPresent(m -> {
+                partes.add(String.format("🌡️ %.1f°C", m.temp()));
+                FaixaTemperatura.fromTemperatura(m.temp())
+                    .ifPresent(f -> partes.add(f.mensagem));
+            });
+        
+        // Vento
+        Optional.ofNullable(weather.wind())
+            .ifPresent(w -> {
+                double kmh = w.speed() * 3.6;
+                partes.add(String.format("💨 Vento: %.1f km/h", kmh));
+                FaixaVento.fromVelocidade(kmh)
+                    .ifPresent(f -> partes.add(f.mensagem));
+                if (w.gust() > 0) {
+                    partes.add(String.format("⚡ Rajadas: %.1f km/h", w.gust() * 3.6));
+                }
+            });
+        
+        // Chuva
+        Optional.ofNullable(weather.rain())
+            .ifPresent(r -> {
+                if (r._1h() > 0) partes.add(String.format("🌧️ Chuva: %.1f mm/h", r._1h()));
+                if (r._3h() > 0) partes.add(String.format("🌧️ Acumulado 3h: %.1f mm", r._3h()));
+                if (r._1h() > 10) partes.add("⚠️ Risco de aquaplanagem!");
+            });
+        
+        // Neve
+        Optional.ofNullable(weather.snow())
+            .ifPresent(s -> {
+                if (s._1h() > 0) partes.add(String.format("❄️ Neve: %.1f mm/h", s._1h()));
+                if (s._3h() > 0) partes.add(String.format("❄️ Acumulado 3h: %.1f mm", s._3h()));
+                if (s._1h() > 5) partes.add("⚠️ Pista escorregadia!");
+            });
+        
+        // Nuvens
+        Optional.ofNullable(weather.clouds())
+            .ifPresent(c -> {
+                String nivel = c.all() < 30 ? "☀️ Poucas nuvens" :
+                               c.all() < 70 ? "⛅ Nublado" : "☁️ Muitas nuvens";
+                partes.add(String.format("%s (%d%%)", nivel, c.all()));
+            });
+        
+        return partes.stream().collect(Collectors.joining("\n"));
+    }
+    
+    private String determinarGravidade(WeatherResponse weather) {
+        return Stream.of(
+            Optional.ofNullable(weather.weather())
+                .filter(w -> w.length > 0)
+                .map(w -> CondicaoClimatica.fromCodigo(w[0].id())
+                    .map(c -> c.gravidadePadrao)
+                    .orElse("BAIXA")),
+            
+            Optional.ofNullable(weather.wind())
+                .map(w -> FaixaVento.fromVelocidade(w.speed() * 3.6)
+                    .map(f -> f.gravidade)
+                    .orElse("BAIXA")),
+            
+            Optional.ofNullable(weather.main())
+                .map(m -> FaixaTemperatura.fromTemperatura(m.temp())
+                    .map(f -> f.gravidade)
+                    .orElse("BAIXA")),
+            
+            Optional.ofNullable(weather.rain())
+                .map(r -> r._1h() > 10 ? "ALTA" : r._1h() > 5 ? "MEDIA" : "BAIXA")
+        )
+        .filter(Optional::isPresent)
+        .map(Optional::get)
+        .max(Comparator.comparingInt(this::gravidadeToInt))
+        .orElse("BAIXA");
+    }
+    
+    private int gravidadeToInt(String g) {
+        return switch(g) {
+            case "BAIXA" -> 1;
+            case "MEDIA" -> 2;
+            case "ALTA" -> 3;
+            case "CRITICA" -> 4;
+            default -> 0;
+        };
+    }
+    
+    private void criarAlertaClimatico(Veiculo veiculo, Viagem viagem, String mensagem, String gravidade) {
+        Alerta alerta = new Alerta();
+        alerta.setVeiculo(veiculo);
+        alerta.setMotorista(viagem != null ? viagem.getMotorista() : null);
+        alerta.setViagem(viagem);
+        alerta.setTipo("CLIMA");
+        alerta.setGravidade(gravidade);
+        alerta.setMensagem(mensagem);
+        alerta.setDataHora(LocalDateTime.now());
+        alerta.setLido(false);
+        alerta.setResolvido(false);
+        
+        alertaRepository.save(alerta);
+        System.out.println("🚨 [" + gravidade + "] " + mensagem);
+    }
+    
+    public Mono<WeatherResponse> getWeatherForLocation(double lat, double lon) {
+        return webClient.get()
+            .uri(uriBuilder -> uriBuilder
+                .path("/weather")
+                .queryParam("lat", lat)
+                .queryParam("lon", lon)
+                .queryParam("appid", apiKey)
+                .queryParam("units", "metric")
+                .queryParam("lang", "pt_br")
+                .build())
+            .retrieve()
+            .bodyToMono(WeatherResponse.class);
+    }
+}

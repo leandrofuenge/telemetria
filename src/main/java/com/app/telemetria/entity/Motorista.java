@@ -28,6 +28,9 @@ public class Motorista {
     @NotBlank(message = "Categoria da CNH é obrigatória")
     @Column(name = "categoria_cnh")
     private String categoriaCnh;
+    
+    @Column(unique = true)
+    private String email; // Adicionar este campo
 
     public Motorista() {
     }
@@ -72,4 +75,11 @@ public class Motorista {
     public void setCategoriaCnh(String categoriaCnh) {
         this.categoriaCnh = categoriaCnh;
     }
+    
+    public String getEmail() { return email; 
+    }
+    
+    public void setEmail(String email) { this.email = email;
+    }
+    
 }

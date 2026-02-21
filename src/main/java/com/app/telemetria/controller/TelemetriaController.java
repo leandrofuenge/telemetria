@@ -4,7 +4,9 @@ import com.app.telemetria.entity.Telemetria;
 import com.app.telemetria.entity.Veiculo;
 import com.app.telemetria.repository.TelemetriaRepository;
 import com.app.telemetria.repository.VeiculoRepository;
+import com.app.telemetria.repository.ViagemRepository;
 import com.app.telemetria.service.AlertaService;
+import com.app.telemetria.service.WeatherAlertService;
 import com.app.telemetria.exception.VeiculoNotFoundException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.HttpStatus;
@@ -19,15 +21,21 @@ public class TelemetriaController {
     
     private final TelemetriaRepository telemetriaRepository;
     private final VeiculoRepository veiculoRepository;
-    private final AlertaService alertaService;  
+    private final ViagemRepository viagemRepository;
+    private final AlertaService alertaService;
+    private final WeatherAlertService weatherAlertService;  // NOVO: Serviço de clima
     
     public TelemetriaController(
             TelemetriaRepository telemetriaRepository,
             VeiculoRepository veiculoRepository,
-            AlertaService alertaService) {  
+            ViagemRepository viagemRepository,
+            AlertaService alertaService,
+            WeatherAlertService weatherAlertService) {  
         this.telemetriaRepository = telemetriaRepository;
         this.veiculoRepository = veiculoRepository;
+        this.viagemRepository = viagemRepository;
         this.alertaService = alertaService;
+        this.weatherAlertService = weatherAlertService;
     }
     
     @PostMapping
@@ -51,6 +59,19 @@ public class TelemetriaController {
         
         // ===== GERAR ALERTAS BASEADO NA TELEMETRIA =====
         alertaService.processarTelemetria(saved);
+        
+        // ===== NOVO: VERIFICAR CONDIÇÕES CLIMÁTICAS =====
+        // Buscar viagem ativa do veículo (se existir)
+        var viagemAtiva = viagemRepository.findByVeiculoAndStatus(veiculo, "EM_ANDAMENTO")
+            .orElse(null);
+        
+        // Verificar clima para esta localização e gerar alertas climáticos
+        weatherAlertService.verificarClimaParaVeiculo(
+            veiculo.getId(), 
+            saved.getLatitude(), 
+            saved.getLongitude(), 
+            viagemAtiva
+        );
         
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
@@ -107,7 +128,7 @@ public class TelemetriaController {
         public Double getVelocidade() { return velocidade; }
         public void setVelocidade(Double velocidade) { this.velocidade = velocidade; }
         
-        public Double getNivelCombustivel() { return nivelCombustivel; }  // NOVO
+        public Double getNivelCombustivel() { return nivelCombustivel; }
         public void setNivelCombustivel(Double nivelCombustivel) { this.nivelCombustivel = nivelCombustivel; }
         
         public LocalDateTime getDataHora() { return dataHora; }
