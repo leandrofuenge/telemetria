@@ -178,13 +178,13 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       
       # OpenWeather - CORRIGIDO: usando as chaves diretamente
-      OPENWEATHER_API_KEY: "875875985c2c7549e0a042fc5669e258"
+      OPENWEATHER_API_KEY: ""
       OPENWEATHER_API_URL: "https://api.openweathermap.org/data/2.5/weather"
       OPENWEATHER_API_UNITS: "metric"
       OPENWEATHER_API_LANG: "pt_br"
       
       # IPLocate - CORRIGIDO: usando as chaves diretamente
-      IPLOCATE_API_KEY: "bca9a31b2cf5b255ec67c39b6bd34059"
+      IPLOCATE_API_KEY: ""
       IPLOCATE_API_URL: "https://iplocate.io/api/lookup"
       
       # MQTT
