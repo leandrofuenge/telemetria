@@ -1,6 +1,7 @@
 package com.app.telemetria.exception;
 
 public class RotaNotFoundException extends RuntimeException {
+    
     public RotaNotFoundException(Long id) {
         super("Rota não encontrada com id: " + id);
     }

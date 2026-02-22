@@ -65,6 +65,7 @@ CREATE TABLE usuarios (
     senha VARCHAR(255) NOT NULL,
     nome VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
+    cpf VARCHAR(14) UNIQUE,
     ativo BOOLEAN DEFAULT TRUE,
     perfil VARCHAR(50) DEFAULT 'OPERADOR',
     ultimo_acesso DATETIME,
@@ -73,7 +74,8 @@ CREATE TABLE usuarios (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_usuario_login (login),
-    INDEX idx_usuario_perfil (perfil)
+    INDEX idx_usuario_perfil (perfil),
+    INDEX idx_usuario_cpf (cpf)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =========================================

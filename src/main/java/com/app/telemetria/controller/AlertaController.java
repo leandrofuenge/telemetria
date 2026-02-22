@@ -4,7 +4,6 @@ import com.app.telemetria.entity.Alerta;
 import com.app.telemetria.entity.Veiculo;
 import com.app.telemetria.repository.AlertaRepository;
 import com.app.telemetria.service.VeiculoService;
-import com.app.telemetria.exception.VeiculoNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;

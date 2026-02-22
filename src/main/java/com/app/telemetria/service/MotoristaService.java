@@ -7,8 +7,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import com.app.telemetria.entity.Motorista;
-import com.app.telemetria.exception.MotoristaDuplicateException;
-import com.app.telemetria.exception.MotoristaNotFoundException;
+import com.app.telemetria.exception.BusinessException;
+import com.app.telemetria.exception.ErrorCode;
 import com.app.telemetria.repository.MotoristaRepository;
 
 @Service
@@ -21,13 +21,28 @@ public class MotoristaService {
         try {
             return repository.save(motorista);
         } catch (DataIntegrityViolationException e) {
-            if (e.getMessage().contains("cpf")) {
-                throw new MotoristaDuplicateException("CPF", motorista.getCpf());
+
+            String message = e.getMostSpecificCause().getMessage();
+
+            if (message != null) {
+                String lowerMessage = message.toLowerCase();
+
+                if (lowerMessage.contains("cpf")) {
+                    throw new BusinessException(
+                            ErrorCode.MOTORISTA_DUPLICATE,
+                            "Já existe um motorista com o CPF: " + motorista.getCpf()
+                    );
+                }
+
+                if (lowerMessage.contains("cnh")) {
+                    throw new BusinessException(
+                            ErrorCode.MOTORISTA_DUPLICATE,
+                            "Já existe um motorista com a CNH: " + motorista.getCnh()
+                    );
+                }
             }
-            if (e.getMessage().contains("cnh")) {
-                throw new MotoristaDuplicateException("CNH", motorista.getCnh());
-            }
-            throw e;
+
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR);
         }
     }
 
@@ -37,32 +52,54 @@ public class MotoristaService {
 
     public Motorista buscarPorId(Long id) {
         return repository.findById(id)
-                .orElseThrow(() -> new MotoristaNotFoundException(id));
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.MOTORISTA_NOT_FOUND,
+                        "Motorista não encontrado com id: " + id
+                ));
     }
-    
+
     public Motorista buscarPorCpf(String cpf) {
         return repository.findByCpf(cpf)
-                .orElseThrow(() -> new MotoristaNotFoundException(cpf));
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.MOTORISTA_NOT_FOUND,
+                        "Motorista não encontrado com CPF: " + cpf
+                ));
     }
 
     public Motorista atualizar(Long id, Motorista dados) {
+
         Motorista motorista = buscarPorId(id);
-        
+
         motorista.setNome(dados.getNome());
         motorista.setCpf(dados.getCpf());
         motorista.setCnh(dados.getCnh());
         motorista.setCategoriaCnh(dados.getCategoriaCnh());
-        
+
         try {
             return repository.save(motorista);
         } catch (DataIntegrityViolationException e) {
-            if (e.getMessage().contains("cpf")) {
-                throw new MotoristaDuplicateException("CPF", dados.getCpf());
+
+            String message = e.getMostSpecificCause().getMessage();
+
+            if (message != null) {
+                String lowerMessage = message.toLowerCase();
+
+                if (lowerMessage.contains("cpf")) {
+                    throw new BusinessException(
+                            ErrorCode.MOTORISTA_DUPLICATE,
+                            "Já existe um motorista com o CPF: " + dados.getCpf()
+                    );
+                }
+
+                if (lowerMessage.contains("cnh")) {
+                    throw new BusinessException(
+                            ErrorCode.MOTORISTA_DUPLICATE,
+                            "Já existe um motorista com a CNH: " + dados.getCnh()
+                    );
+                }
             }
-            if (e.getMessage().contains("cnh")) {
-                throw new MotoristaDuplicateException("CNH", dados.getCnh());
-            }
-            throw e;
+
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR);
         }
     }
 

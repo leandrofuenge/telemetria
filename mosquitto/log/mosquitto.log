@@ -1,0 +1,52 @@
+1771694266: mosquitto version 2.1.2 starting
+1771694266: Config loaded from /mosquitto/config/mosquitto.conf.
+1771694266: Bridge support available.
+1771694266: Persistence support available.
+1771694266: TLS support available.
+1771694266: TLS-PSK support available.
+1771694266: Websockets support available.
+1771694266: Opening ipv4 listen socket on port 1883.
+1771694266: mosquitto version 2.1.2 running
+1771696067: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1771696419: mosquitto version 2.1.2 terminating
+1771696419: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1771696443: mosquitto version 2.1.2 starting
+1771696443: Config loaded from /mosquitto/config/mosquitto.conf.
+1771696443: Bridge support available.
+1771696443: Persistence support available.
+1771696443: TLS support available.
+1771696443: TLS-PSK support available.
+1771696443: Websockets support available.
+1771696443: Opening ipv4 listen socket on port 1883.
+1771696443: mosquitto version 2.1.2 running
+1771696961: mosquitto version 2.1.2 terminating
+1771696961: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1771696983: mosquitto version 2.1.2 starting
+1771696983: Config loaded from /mosquitto/config/mosquitto.conf.
+1771696983: Bridge support available.
+1771696983: Persistence support available.
+1771696983: TLS support available.
+1771696983: TLS-PSK support available.
+1771696983: Websockets support available.
+1771696983: Opening ipv4 listen socket on port 1883.
+1771696983: mosquitto version 2.1.2 running
+1771697271: mosquitto version 2.1.2 terminating
+1771697271: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1771699099: mosquitto version 2.1.2 starting
+1771699099: Config loaded from /mosquitto/config/mosquitto.conf.
+1771699099: Bridge support available.
+1771699099: Persistence support available.
+1771699099: TLS support available.
+1771699099: TLS-PSK support available.
+1771699099: Websockets support available.
+1771699099: Opening ipv4 listen socket on port 1883.
+1771699099: mosquitto version 2.1.2 running
+1771700900: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1771702701: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1771704502: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1771712061: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1771713862: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1771715663: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1771717464: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1771719971: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1771721772: Saving in-memory database to /mosquitto/data//mosquitto.db.

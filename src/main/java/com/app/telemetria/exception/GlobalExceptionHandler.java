@@ -1,6 +1,8 @@
 package com.app.telemetria.exception;
 
-import org.springframework.dao.DataIntegrityViolationException;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -9,306 +11,383 @@ import org.springframework.security.authentication.LockedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.context.request.WebRequest;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.NoSuchElementException;
+
+import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.MqttSecurityException;
+import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // ================= HANDLERS DE AUTENTICAÇÃO =================
-    
+    // ================= BUSINESS EXCEPTIONS =================
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ErrorResponse> handleBusinessException(
+            BusinessException ex,
+            HttpServletRequest request) {
+
+        ErrorCode errorCode = ex.getErrorCode();
+
+        ErrorResponse response = new ErrorResponse(
+                errorCode.getCode(),
+                ex.getMessage(),
+                errorCode.getHttpStatus().value(),
+                request.getRequestURI(),
+                null
+        );
+
+        return ResponseEntity
+                .status(errorCode.getHttpStatus())
+                .body(response);
+    }
+
+    // ================= VALIDAÇÃO =================
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidationException(
+            MethodArgumentNotValidException ex,
+            HttpServletRequest request) {
+
+        Map<String, String> errors = new HashMap<>();
+
+        ex.getBindingResult().getFieldErrors()
+                .forEach(err -> errors.put(err.getField(), err.getDefaultMessage()));
+
+        ErrorResponse response = new ErrorResponse(
+                ErrorCode.VALIDATION_ERROR.getCode(),
+                ErrorCode.VALIDATION_ERROR.getMessage(),
+                HttpStatus.BAD_REQUEST.value(),
+                request.getRequestURI(),
+                errors
+        );
+
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    // ================= AUTENTICAÇÃO (401) =================
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleBadCredentialsException(
-            BadCredentialsException ex, WebRequest request) {
-        
-        ErrorResponse error = new ErrorResponse(
-            LocalDateTime.now(),
-            HttpStatus.UNAUTHORIZED.value(),
-            "Autenticação falhou",
-            "Login ou senha inválidos",
-            request.getDescription(false).replace("uri=", ""),
-            null
+            HttpServletRequest request) {
+
+        ErrorResponse response = new ErrorResponse(
+                ErrorCode.INVALID_CREDENTIALS.getCode(),
+                ErrorCode.INVALID_CREDENTIALS.getMessage(),
+                ErrorCode.INVALID_CREDENTIALS.getHttpStatus().value(),
+                request.getRequestURI(),
+                null
         );
-        
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+
+        return ResponseEntity
+                .status(ErrorCode.INVALID_CREDENTIALS.getHttpStatus())
+                .body(response);
     }
 
-    @ExceptionHandler(NoSuchElementException.class)
-    public ResponseEntity<ErrorResponse> handleNoSuchElementException(
-            NoSuchElementException ex, WebRequest request) {
-        
-        ErrorResponse error = new ErrorResponse(
-            LocalDateTime.now(),
-            HttpStatus.NOT_FOUND.value(),
-            "Recurso não encontrado",
-            "Usuário não encontrado no sistema",
-            request.getDescription(false).replace("uri=", ""),
-            null
-        );
-        
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
-    }
-
-    @ExceptionHandler(io.jsonwebtoken.JwtException.class)
-    public ResponseEntity<ErrorResponse> handleJwtException(
-            io.jsonwebtoken.JwtException ex, WebRequest request) {
-        
-        ErrorResponse error = new ErrorResponse(
-            LocalDateTime.now(),
-            HttpStatus.FORBIDDEN.value(),
-            "Token inválido",
-            "Token inválido ou expirado",
-            request.getDescription(false).replace("uri=", ""),
-            null
-        );
-        
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
-    }
-
+    // ================= CONTA DESABILITADA (403) =================
     @ExceptionHandler(DisabledException.class)
     public ResponseEntity<ErrorResponse> handleDisabledException(
-            DisabledException ex, WebRequest request) {
-        
-        ErrorResponse error = new ErrorResponse(
-            LocalDateTime.now(),
-            HttpStatus.FORBIDDEN.value(),
-            "Conta desabilitada",
-            "Sua conta está desabilitada. Contate o administrador.",
-            request.getDescription(false).replace("uri=", ""),
-            null
+            HttpServletRequest request) {
+
+        ErrorResponse response = new ErrorResponse(
+                ErrorCode.ACCOUNT_DISABLED.getCode(),
+                ErrorCode.ACCOUNT_DISABLED.getMessage(),
+                ErrorCode.ACCOUNT_DISABLED.getHttpStatus().value(),
+                request.getRequestURI(),
+                null
         );
-        
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+
+        return ResponseEntity
+                .status(ErrorCode.ACCOUNT_DISABLED.getHttpStatus())
+                .body(response);
     }
 
+    // ================= CONTA BLOQUEADA (403) =================
     @ExceptionHandler(LockedException.class)
     public ResponseEntity<ErrorResponse> handleLockedException(
-            LockedException ex, WebRequest request) {
-        
-        ErrorResponse error = new ErrorResponse(
-            LocalDateTime.now(),
-            HttpStatus.FORBIDDEN.value(),
-            "Conta bloqueada",
-            "Sua conta está bloqueada. Contate o administrador.",
-            request.getDescription(false).replace("uri=", ""),
-            null
+            HttpServletRequest request) {
+
+        ErrorResponse response = new ErrorResponse(
+                ErrorCode.ACCOUNT_LOCKED.getCode(),
+                ErrorCode.ACCOUNT_LOCKED.getMessage(),
+                ErrorCode.ACCOUNT_LOCKED.getHttpStatus().value(),
+                request.getRequestURI(),
+                null
         );
-        
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+
+        return ResponseEntity
+                .status(ErrorCode.ACCOUNT_LOCKED.getHttpStatus())
+                .body(response);
     }
 
-    // ================= HANDLER GENÉRICO PARA DATA INTEGRITY =================
-    
-    @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(
-            DataIntegrityViolationException ex, WebRequest request) {
-        
-        String message = "Erro de integridade de dados";
-        String errorType = "Violação de constraint";
-        HttpStatus status = HttpStatus.CONFLICT;
-        
-        String exMessage = ex.getMessage();
-        
-        if (exMessage.contains("Duplicate entry")) {
-            if (exMessage.contains("cpf")) {
-                message = "CPF já cadastrado no sistema";
-                errorType = "CPF duplicado";
-            } else if (exMessage.contains("cnh")) {
-                message = "CNH já cadastrada no sistema";
-                errorType = "CNH duplicada";
-            } else if (exMessage.contains("email")) {
-                message = "E-mail já cadastrado no sistema";
-                errorType = "E-mail duplicado";
-            } else if (exMessage.contains("login")) {
-                message = "Login já cadastrado no sistema";
-                errorType = "Login duplicado";
-            } else if (exMessage.contains("placa")) {
-                message = "Placa já cadastrada no sistema";
-                errorType = "Placa duplicada";
-            } else if (exMessage.contains("nome")) {
-                message = "Nome já cadastrado no sistema";
-                errorType = "Nome duplicado";
-            }
-        } else if (exMessage.contains("cannot be null")) {
-            message = "Campos obrigatórios não preenchidos";
-            errorType = "Campo obrigatório";
-            status = HttpStatus.BAD_REQUEST;
-        } else if (exMessage.contains("foreign key")) {
-            message = "Registro possui referências em outras tabelas";
-            errorType = "Violação de chave estrangeira";
-            status = HttpStatus.CONFLICT;
+    // ================= JWT TOKEN INVALID (403) =================
+    @ExceptionHandler(io.jsonwebtoken.JwtException.class)
+    public ResponseEntity<ErrorResponse> handleJwtException(
+            HttpServletRequest request) {
+
+        ErrorResponse response = new ErrorResponse(
+                ErrorCode.TOKEN_INVALID.getCode(),
+                ErrorCode.TOKEN_INVALID.getMessage(),
+                ErrorCode.TOKEN_INVALID.getHttpStatus().value(),
+                request.getRequestURI(),
+                null
+        );
+
+        return ResponseEntity
+                .status(ErrorCode.TOKEN_INVALID.getHttpStatus())
+                .body(response);
+    }
+
+    // ================= RECURSO NÃO ENCONTRADO (404) =================
+    @ExceptionHandler({
+        com.app.telemetria.exception.MotoristaNotFoundException.class,
+        com.app.telemetria.exception.VeiculoNotFoundException.class,
+        com.app.telemetria.exception.RotaNotFoundException.class,
+        com.app.telemetria.exception.ViagemNotFoundException.class
+    })
+    public ResponseEntity<ErrorResponse> handleNotFoundException(
+            RuntimeException ex,
+            HttpServletRequest request) {
+
+        ErrorCode errorCode = determinarErrorCode(ex);
+
+        ErrorResponse response = new ErrorResponse(
+                errorCode.getCode(),
+                ex.getMessage() != null ? ex.getMessage() : errorCode.getMessage(),
+                errorCode.getHttpStatus().value(),
+                request.getRequestURI(),
+                null
+        );
+
+        return ResponseEntity
+                .status(errorCode.getHttpStatus())
+                .body(response);
+    }
+
+    private ErrorCode determinarErrorCode(RuntimeException ex) {
+        if (ex instanceof com.app.telemetria.exception.MotoristaNotFoundException) {
+            return ErrorCode.MOTORISTA_NOT_FOUND;
         }
-        
-        ErrorResponse error = new ErrorResponse(
-            LocalDateTime.now(),
-            status.value(),
-            errorType,
-            message,
-            request.getDescription(false).replace("uri=", ""),
-            null
-        );
-        
-        return ResponseEntity.status(status).body(error);
+        if (ex instanceof com.app.telemetria.exception.VeiculoNotFoundException) {
+            return ErrorCode.VEICULO_NOT_FOUND;
+        }
+        if (ex instanceof com.app.telemetria.exception.RotaNotFoundException) {
+            return ErrorCode.ROTA_NOT_FOUND;
+        }
+        if (ex instanceof com.app.telemetria.exception.ViagemNotFoundException) {
+            return ErrorCode.VIAGEM_NOT_FOUND;
+        }
+        return ErrorCode.RESOURCE_NOT_FOUND;
     }
 
-    // ================= HANDLERS DE VALIDAÇÃO =================
-    
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidationExceptions(
-            MethodArgumentNotValidException ex, WebRequest request) {
-        
-        Map<String, String> errors = new HashMap<>();
-        ex.getBindingResult().getAllErrors().forEach((error) -> {
-            String fieldName = ((org.springframework.validation.FieldError) error).getField();
-            String errorMessage = error.getDefaultMessage();
-            errors.put(fieldName, errorMessage);
-        });
-        
-        ErrorResponse error = new ErrorResponse(
-            LocalDateTime.now(),
-            HttpStatus.BAD_REQUEST.value(),
-            "Erro de validação",
-            "Campos inválidos",
-            request.getDescription(false).replace("uri=", ""),
-            errors
+    // ================= CONFLITO (409) =================
+    @ExceptionHandler({
+        com.app.telemetria.exception.MotoristaDuplicateException.class,
+        com.app.telemetria.exception.VeiculoDuplicateException.class,
+        com.app.telemetria.exception.RotaDuplicateException.class
+    })
+    public ResponseEntity<ErrorResponse> handleDuplicateException(
+            RuntimeException ex,
+            HttpServletRequest request) {
+
+        ErrorCode errorCode = determinarErrorCodeDuplicado(ex);
+
+        ErrorResponse response = new ErrorResponse(
+                errorCode.getCode(),
+                ex.getMessage() != null ? ex.getMessage() : errorCode.getMessage(),
+                errorCode.getHttpStatus().value(),
+                request.getRequestURI(),
+                null
         );
-        
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+
+        return ResponseEntity
+                .status(errorCode.getHttpStatus())
+                .body(response);
     }
 
-    // ================= HANDLERS DE EXCEÇÕES PERSONALIZADAS =================
-    
-    @ExceptionHandler(RotaNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleRotaNotFoundException(
-            RotaNotFoundException ex, WebRequest request) {
-        
-        ErrorResponse error = new ErrorResponse(
-            LocalDateTime.now(),
-            HttpStatus.NOT_FOUND.value(),
-            "Rota não encontrada",
-            ex.getMessage(),
-            request.getDescription(false).replace("uri=", ""),
-            null
-        );
-        
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    private ErrorCode determinarErrorCodeDuplicado(RuntimeException ex) {
+        if (ex instanceof com.app.telemetria.exception.MotoristaDuplicateException) {
+            return ErrorCode.MOTORISTA_DUPLICATE;
+        }
+        if (ex instanceof com.app.telemetria.exception.VeiculoDuplicateException) {
+            return ErrorCode.VEICULO_DUPLICATE;
+        }
+        if (ex instanceof com.app.telemetria.exception.RotaDuplicateException) {
+            return ErrorCode.ROTA_DUPLICATE;
+        }
+        return ErrorCode.DUPLICATE_RESOURCE;
     }
 
-    @ExceptionHandler(RotaDuplicateException.class)
-    public ResponseEntity<ErrorResponse> handleRotaDuplicateException(
-            RotaDuplicateException ex, WebRequest request) {
-        
-        ErrorResponse error = new ErrorResponse(
-            LocalDateTime.now(),
-            HttpStatus.CONFLICT.value(),
-            "Rota duplicada",
-            ex.getMessage(),
-            request.getDescription(false).replace("uri=", ""),
-            null
+    // ================= ERROS DE NEGÓCIO (422) =================
+    @ExceptionHandler({
+        com.app.telemetria.exception.RotaValidationException.class,
+        com.app.telemetria.exception.VeiculoIndisponivelException.class,
+        com.app.telemetria.exception.MotoristaIndisponivelException.class
+    })
+    public ResponseEntity<ErrorResponse> handleBusinessRuleException(
+            RuntimeException ex,
+            HttpServletRequest request) {
+
+        ErrorCode errorCode = determinarErrorCodeBusiness(ex);
+
+        ErrorResponse response = new ErrorResponse(
+                errorCode.getCode(),
+                ex.getMessage() != null ? ex.getMessage() : errorCode.getMessage(),
+                errorCode.getHttpStatus().value(),
+                request.getRequestURI(),
+                null
         );
-        
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+
+        return ResponseEntity
+                .status(errorCode.getHttpStatus())
+                .body(response);
     }
 
-    @ExceptionHandler(RotaValidationException.class)
-    public ResponseEntity<ErrorResponse> handleRotaValidationException(
-            RotaValidationException ex, WebRequest request) {
-        
-        ErrorResponse error = new ErrorResponse(
-            LocalDateTime.now(),
-            HttpStatus.BAD_REQUEST.value(),
-            "Erro de validação de rota",
-            ex.getMessage(),
-            request.getDescription(false).replace("uri=", ""),
-            null
-        );
-        
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    private ErrorCode determinarErrorCodeBusiness(RuntimeException ex) {
+        if (ex instanceof com.app.telemetria.exception.RotaValidationException) {
+            return ErrorCode.ROTA_INVALID;
+        }
+        if (ex instanceof com.app.telemetria.exception.VeiculoIndisponivelException) {
+            return ErrorCode.VEICULO_INDISPONIVEL;
+        }
+        if (ex instanceof com.app.telemetria.exception.MotoristaIndisponivelException) {
+            return ErrorCode.MOTORISTA_INDISPONIVEL;
+        }
+        return ErrorCode.BUSINESS_ERROR;
     }
 
-    @ExceptionHandler(MotoristaNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleMotoristaNotFoundException(
-            MotoristaNotFoundException ex, WebRequest request) {
-        
-        ErrorResponse error = new ErrorResponse(
-            LocalDateTime.now(),
-            HttpStatus.NOT_FOUND.value(),
-            "Motorista não encontrado",
-            ex.getMessage(),
-            request.getDescription(false).replace("uri=", ""),
-            null
+    // ================= INTEGRAÇÃO EXTERNA (424) =================
+    @ExceptionHandler(com.app.telemetria.exception.WeatherApiException.class)
+    public ResponseEntity<ErrorResponse> handleWeatherApiException(
+            HttpServletRequest request) {
+
+        ErrorResponse response = new ErrorResponse(
+                ErrorCode.WEATHER_API_ERROR.getCode(),
+                ErrorCode.WEATHER_API_ERROR.getMessage(),
+                ErrorCode.WEATHER_API_ERROR.getHttpStatus().value(),
+                request.getRequestURI(),
+                null
         );
-        
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+
+        return ResponseEntity
+                .status(ErrorCode.WEATHER_API_ERROR.getHttpStatus())
+                .body(response);
     }
 
-    @ExceptionHandler(MotoristaDuplicateException.class)
-    public ResponseEntity<ErrorResponse> handleMotoristaDuplicateException(
-            MotoristaDuplicateException ex, WebRequest request) {
-        
-        ErrorResponse error = new ErrorResponse(
-            LocalDateTime.now(),
-            HttpStatus.CONFLICT.value(),
-            "Motorista duplicado",
-            ex.getMessage(),
-            request.getDescription(false).replace("uri=", ""),
-            null
+    // ================= MUITAS REQUISIÇÕES (429) =================
+    @ExceptionHandler(org.springframework.web.client.HttpClientErrorException.TooManyRequests.class)
+    public ResponseEntity<ErrorResponse> handleTooManyRequestsException(
+            HttpServletRequest request) {
+
+        ErrorResponse response = new ErrorResponse(
+                ErrorCode.TOO_MANY_REQUESTS.getCode(),
+                ErrorCode.TOO_MANY_REQUESTS.getMessage(),
+                ErrorCode.TOO_MANY_REQUESTS.getHttpStatus().value(),
+                request.getRequestURI(),
+                null
         );
-        
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+
+        return ResponseEntity
+                .status(ErrorCode.TOO_MANY_REQUESTS.getHttpStatus())
+                .body(response);
     }
 
-    @ExceptionHandler(VeiculoNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleVeiculoNotFoundException(
-            VeiculoNotFoundException ex, WebRequest request) {
-        
-        ErrorResponse error = new ErrorResponse(
-            LocalDateTime.now(),
-            HttpStatus.NOT_FOUND.value(),
-            "Veículo não encontrado",
-            ex.getMessage(),
-            request.getDescription(false).replace("uri=", ""),
-            null
+    // ================= ERRO NO BANCO DE DADOS (500) =================
+    @ExceptionHandler(org.springframework.dao.DataAccessException.class)
+    public ResponseEntity<ErrorResponse> handleDataAccessException(
+            HttpServletRequest request) {
+
+        ErrorResponse response = new ErrorResponse(
+                ErrorCode.DATABASE_ERROR.getCode(),
+                ErrorCode.DATABASE_ERROR.getMessage(),
+                ErrorCode.DATABASE_ERROR.getHttpStatus().value(),
+                request.getRequestURI(),
+                null
         );
-        
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+
+        return ResponseEntity
+                .status(ErrorCode.DATABASE_ERROR.getHttpStatus())
+                .body(response);
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ErrorResponse> handleIllegalArgumentException(
-            IllegalArgumentException ex, WebRequest request) {
-        
-        ErrorResponse error = new ErrorResponse(
-            LocalDateTime.now(),
-            HttpStatus.BAD_REQUEST.value(),
-            "Requisição inválida",
-            ex.getMessage() != null ? ex.getMessage() : "Dados inválidos",
-            request.getDescription(false).replace("uri=", ""),
-            null
+    // ================= ERRO NO KAFKA (500) =================
+    @ExceptionHandler(org.springframework.kafka.core.KafkaProducerException.class)
+    public ResponseEntity<ErrorResponse> handleKafkaProducerException(
+            HttpServletRequest request) {
+
+        ErrorResponse response = new ErrorResponse(
+                ErrorCode.KAFKA_PRODUCER_ERROR.getCode(),
+                ErrorCode.KAFKA_PRODUCER_ERROR.getMessage(),
+                ErrorCode.KAFKA_PRODUCER_ERROR.getHttpStatus().value(),
+                request.getRequestURI(),
+                null
         );
-        
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+
+        return ResponseEntity
+                .status(ErrorCode.KAFKA_PRODUCER_ERROR.getHttpStatus())
+                .body(response);
     }
 
-    // ================= HANDLER GENÉRICO =================
-    
+    // ================= ERRO NO MQTT (500) - CORRIGIDO =================
+    @ExceptionHandler({
+        org.eclipse.paho.client.mqttv3.MqttException.class,
+        org.eclipse.paho.client.mqttv3.MqttSecurityException.class,
+        org.eclipse.paho.client.mqttv3.MqttPersistenceException.class
+    })
+    public ResponseEntity<ErrorResponse> handleMqttException(
+            Exception ex,
+            HttpServletRequest request) {
+
+        ErrorResponse response = new ErrorResponse(
+                ErrorCode.MQTT_CONNECTION_ERROR.getCode(),
+                "Erro na comunicação MQTT: " + ex.getMessage(),
+                ErrorCode.MQTT_CONNECTION_ERROR.getHttpStatus().value(),
+                request.getRequestURI(),
+                null
+        );
+
+        return ResponseEntity
+                .status(ErrorCode.MQTT_CONNECTION_ERROR.getHttpStatus())
+                .body(response);
+    }
+
+    // ================= TIMEOUT (504) =================
+    @ExceptionHandler(org.springframework.web.client.ResourceAccessException.class)
+    public ResponseEntity<ErrorResponse> handleTimeoutException(
+            HttpServletRequest request) {
+
+        ErrorResponse response = new ErrorResponse(
+                ErrorCode.GATEWAY_TIMEOUT.getCode(),
+                ErrorCode.GATEWAY_TIMEOUT.getMessage(),
+                ErrorCode.GATEWAY_TIMEOUT.getHttpStatus().value(),
+                request.getRequestURI(),
+                null
+        );
+
+        return ResponseEntity
+                .status(ErrorCode.GATEWAY_TIMEOUT.getHttpStatus())
+                .body(response);
+    }
+
+    // ================= GENÉRICO (500) =================
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(
-            Exception ex, WebRequest request) {
-        
-        ErrorResponse error = new ErrorResponse(
-            LocalDateTime.now(),
-            HttpStatus.INTERNAL_SERVER_ERROR.value(),
-            "Erro interno",
-            "Ocorreu um erro inesperado. Tente novamente mais tarde.",
-            request.getDescription(false).replace("uri=", ""),
-            null
+            Exception ex,
+            HttpServletRequest request) {
+
+        // Log do erro para debugging
+        System.err.println("Erro não tratado: " + ex.getClass().getName() + " - " + ex.getMessage());
+        ex.printStackTrace();
+
+        ErrorResponse response = new ErrorResponse(
+                ErrorCode.INTERNAL_ERROR.getCode(),
+                ErrorCode.INTERNAL_ERROR.getMessage(),
+                ErrorCode.INTERNAL_ERROR.getHttpStatus().value(),
+                request.getRequestURI(),
+                null
         );
-        
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+
+        return ResponseEntity
+                .status(ErrorCode.INTERNAL_ERROR.getHttpStatus())
+                .body(response);
     }
 }

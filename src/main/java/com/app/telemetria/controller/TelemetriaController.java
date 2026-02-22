@@ -7,7 +7,8 @@ import com.app.telemetria.repository.VeiculoRepository;
 import com.app.telemetria.repository.ViagemRepository;
 import com.app.telemetria.service.AlertaService;
 import com.app.telemetria.service.WeatherAlertService;
-import com.app.telemetria.exception.VeiculoNotFoundException;
+import com.app.telemetria.exception.ErrorCode;
+import com.app.telemetria.exception.BusinessException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,7 +24,7 @@ public class TelemetriaController {
     private final VeiculoRepository veiculoRepository;
     private final ViagemRepository viagemRepository;
     private final AlertaService alertaService;
-    private final WeatherAlertService weatherAlertService;  // NOVO: Serviço de clima
+    private final WeatherAlertService weatherAlertService;
     
     public TelemetriaController(
             TelemetriaRepository telemetriaRepository,
@@ -40,9 +41,18 @@ public class TelemetriaController {
     
     @PostMapping
     public ResponseEntity<Telemetria> criar(@RequestBody TelemetriaRequest request) {
-        // Buscar o veículo
+        // Buscar o veículo - usando ErrorCode.VEICULO_NOT_FOUND
         Veiculo veiculo = veiculoRepository.findById(request.getVeiculo().getId())
-            .orElseThrow(() -> new VeiculoNotFoundException(request.getVeiculo().getId()));
+            .orElseThrow(() -> new BusinessException(
+                ErrorCode.VEICULO_NOT_FOUND,
+                request.getVeiculo().getId().toString()
+            ));
+        
+        // Validação básica dos dados
+        if (request.getLatitude() == null || request.getLongitude() == null) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, 
+                "Latitude e longitude são obrigatórios");
+        }
         
         // Criar nova telemetria
         Telemetria telemetria = new Telemetria();
@@ -60,7 +70,7 @@ public class TelemetriaController {
         // ===== GERAR ALERTAS BASEADO NA TELEMETRIA =====
         alertaService.processarTelemetria(saved);
         
-        // ===== NOVO: VERIFICAR CONDIÇÕES CLIMÁTICAS =====
+        // ===== VERIFICAR CONDIÇÕES CLIMÁTICAS =====
         // Buscar viagem ativa do veículo (se existir)
         var viagemAtiva = viagemRepository.findByVeiculoAndStatus(veiculo, "EM_ANDAMENTO")
             .orElse(null);
@@ -79,14 +89,21 @@ public class TelemetriaController {
     @GetMapping("/veiculo/{veiculoId}")
     public List<Telemetria> listarPorVeiculo(@PathVariable Long veiculoId) {
         Veiculo veiculo = veiculoRepository.findById(veiculoId)
-            .orElseThrow(() -> new VeiculoNotFoundException(veiculoId));
+            .orElseThrow(() -> new BusinessException(
+                ErrorCode.VEICULO_NOT_FOUND,
+                veiculoId.toString()
+            ));
+            
         return telemetriaRepository.findByVeiculoOrderByDataHoraDesc(veiculo);
     }
     
     @GetMapping("/veiculo/{veiculoId}/ultima")
     public ResponseEntity<Telemetria> ultimaTelemetria(@PathVariable Long veiculoId) {
         Veiculo veiculo = veiculoRepository.findById(veiculoId)
-            .orElseThrow(() -> new VeiculoNotFoundException(veiculoId));
+            .orElseThrow(() -> new BusinessException(
+                ErrorCode.VEICULO_NOT_FOUND,
+                veiculoId.toString()
+            ));
         
         return telemetriaRepository.findUltimaTelemetriaByVeiculo(veiculo)
             .map(ResponseEntity::ok)
@@ -99,8 +116,16 @@ public class TelemetriaController {
             @RequestParam LocalDateTime inicio,
             @RequestParam LocalDateTime fim) {
         
+        if (inicio.isAfter(fim)) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, 
+                "Data de início não pode ser posterior à data de fim");
+        }
+        
         Veiculo veiculo = veiculoRepository.findById(veiculoId)
-            .orElseThrow(() -> new VeiculoNotFoundException(veiculoId));
+            .orElseThrow(() -> new BusinessException(
+                ErrorCode.VEICULO_NOT_FOUND,
+                veiculoId.toString()
+            ));
         
         return telemetriaRepository.findByVeiculoAndDataHoraBetweenOrderByDataHoraAsc(
             veiculo, inicio, fim);
