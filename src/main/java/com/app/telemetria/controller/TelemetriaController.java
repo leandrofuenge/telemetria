@@ -9,12 +9,15 @@ import com.app.telemetria.service.AlertaService;
 import com.app.telemetria.service.WeatherAlertService;
 import com.app.telemetria.exception.ErrorCode;
 import com.app.telemetria.exception.BusinessException;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.kafka.core.KafkaTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 @RestController
 @RequestMapping("/api/v1/telemetria")
@@ -25,65 +28,49 @@ public class TelemetriaController {
     private final ViagemRepository viagemRepository;
     private final AlertaService alertaService;
     private final WeatherAlertService weatherAlertService;
+    private final KafkaTemplate<String, TelemetriaRequest> kafkaTemplate;
+    
+    private static final String TOPIC = "telemetria-raw";
     
     public TelemetriaController(
             TelemetriaRepository telemetriaRepository,
             VeiculoRepository veiculoRepository,
             ViagemRepository viagemRepository,
             AlertaService alertaService,
-            WeatherAlertService weatherAlertService) {  
+            WeatherAlertService weatherAlertService,
+            KafkaTemplate<String, TelemetriaRequest> kafkaTemplate) {  
         this.telemetriaRepository = telemetriaRepository;
         this.veiculoRepository = veiculoRepository;
         this.viagemRepository = viagemRepository;
         this.alertaService = alertaService;
         this.weatherAlertService = weatherAlertService;
+        this.kafkaTemplate = kafkaTemplate;
     }
     
     @PostMapping
-    public ResponseEntity<Telemetria> criar(@RequestBody TelemetriaRequest request) {
-        // Buscar o veículo - usando ErrorCode.VEICULO_NOT_FOUND
+    public ResponseEntity<String> criar(@RequestBody TelemetriaRequest request) {
+     
+
         Veiculo veiculo = veiculoRepository.findById(request.getVeiculo().getId())
             .orElseThrow(() -> new BusinessException(
                 ErrorCode.VEICULO_NOT_FOUND,
                 request.getVeiculo().getId().toString()
             ));
         
-        // Validação básica dos dados
         if (request.getLatitude() == null || request.getLongitude() == null) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, 
                 "Latitude e longitude são obrigatórios");
         }
         
-        // Criar nova telemetria
-        Telemetria telemetria = new Telemetria();
-        telemetria.setVeiculo(veiculo);
-        telemetria.setLatitude(request.getLatitude());
-        telemetria.setLongitude(request.getLongitude());
-        telemetria.setVelocidade(request.getVelocidade());
-        telemetria.setNivelCombustivel(request.getNivelCombustivel()); 
-        telemetria.setDataHora(request.getDataHora() != null ? 
-            request.getDataHora() : LocalDateTime.now());
+        // Envia para processamento em background
+        CompletableFuture.supplyAsync(() -> {
+            kafkaTemplate.send(TOPIC, veiculo.getId().toString(), request);
+            return "Mensagem enviada para processamento";
+        });
         
-        // Salvar telemetria
-        Telemetria saved = telemetriaRepository.save(telemetria);
-        
-        // ===== GERAR ALERTAS BASEADO NA TELEMETRIA =====
-        alertaService.processarTelemetria(saved);
-        
-        // ===== VERIFICAR CONDIÇÕES CLIMÁTICAS =====
-        // Buscar viagem ativa do veículo (se existir)
-        var viagemAtiva = viagemRepository.findByVeiculoAndStatus(veiculo, "EM_ANDAMENTO")
-            .orElse(null);
-        
-        // Verificar clima para esta localização e gerar alertas climáticos
-        weatherAlertService.verificarClimaParaVeiculo(
-            veiculo.getId(), 
-            saved.getLatitude(), 
-            saved.getLongitude(), 
-            viagemAtiva
-        );
-        
-        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+        return ResponseEntity
+                .status(HttpStatus.ACCEPTED)
+                .body("Telemetria recebida e em processamento assíncrono. ID do veículo: " + veiculo.getId());
     }
     
     @GetMapping("/veiculo/{veiculoId}")
@@ -137,7 +124,7 @@ public class TelemetriaController {
         private Double latitude;
         private Double longitude;
         private Double velocidade;
-        private Double nivelCombustivel;  
+        private Double nivelCombustible;  
         private LocalDateTime dataHora;
         
         // Getters e Setters
@@ -153,8 +140,8 @@ public class TelemetriaController {
         public Double getVelocidade() { return velocidade; }
         public void setVelocidade(Double velocidade) { this.velocidade = velocidade; }
         
-        public Double getNivelCombustivel() { return nivelCombustivel; }
-        public void setNivelCombustivel(Double nivelCombustivel) { this.nivelCombustivel = nivelCombustivel; }
+        public Double getNivelCombustible() { return nivelCombustible; }
+        public void setNivelCombustible(Double nivelCombustible) { this.nivelCombustible = nivelCombustible; }
         
         public LocalDateTime getDataHora() { return dataHora; }
         public void setDataHora(LocalDateTime dataHora) { this.dataHora = dataHora; }

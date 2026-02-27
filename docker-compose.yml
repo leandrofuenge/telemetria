@@ -46,6 +46,44 @@ services:
       - telemetria-network
 
   # =========================================
+  # REDIS (NOVO!)
+  # =========================================
+  redis:
+    image: redis:7.4-alpine
+    container_name: telemetria-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - telemetria-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =========================================
+  # REDIS INSIGHT (Interface Gráfica para Redis)
+  # =========================================
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: telemetria-redis-insight
+    restart: always
+    ports:
+      - "5540:5540"
+    volumes:
+      - redis-insight_data:/data
+    networks:
+      - telemetria-network
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # =========================================
   # ZOOKEEPER
   # =========================================
   zookeeper:
@@ -151,7 +189,7 @@ services:
       retries: 5
 
   # =========================================
-  # APLICAÇÃO SPRING BOOT (CORRIGIDO)
+  # APLICAÇÃO SPRING BOOT
   # =========================================
   app:
     build: .
@@ -164,6 +202,8 @@ services:
         condition: service_healthy
       emqx:
         condition: service_healthy
+      redis:
+        condition: service_healthy  # NOVO: Redis healthcheck
     ports:
       - "8080:8080"
     environment:
@@ -177,13 +217,22 @@ services:
       # Kafka
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       
-      # OpenWeather - CORRIGIDO: usando as chaves diretamente
+      # Redis - CORRIGIDO
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD:
+      SPRING_DATA_REDIS_TIMEOUT: 2000
+      SPRING_DATA_REDIS_LETTUCE_POOL_MAX_ACTIVE: 8
+      SPRING_DATA_REDIS_LETTUCE_POOL_MAX_IDLE: 8
+      SPRING_DATA_REDIS_LETTUCE_POOL_MIN_IDLE: 0
+      
+      # OpenWeather
       OPENWEATHER_API_KEY: "875875985c2c7549e0a042fc5669e258"
       OPENWEATHER_API_URL: "https://api.openweathermap.org/data/2.5/weather"
       OPENWEATHER_API_UNITS: "metric"
       OPENWEATHER_API_LANG: "pt_br"
       
-      # IPLocate - CORRIGIDO: usando as chaves diretamente
+      # IPLocate
       IPLOCATE_API_KEY: "bca9a31b2cf5b255ec67c39b6bd34059"
       IPLOCATE_API_URL: "https://iplocate.io/api/lookup"
       
@@ -224,3 +273,5 @@ networks:
 
 volumes:
   mysql_data:
+  redis_data:  # NOVO: Volume para persistência do Redis
+  redis-insight_data:  # NOVO: Volume para Redis Insight

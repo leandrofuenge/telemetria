@@ -6,12 +6,16 @@ import com.app.telemetria.enums.GravidadeAlerta;
 import com.app.telemetria.repository.AlertaRepository;
 import com.app.telemetria.repository.VeiculoRepository;
 import com.app.telemetria.repository.ViagemRepository;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.LocalDateTime;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 public class AlertaService {
@@ -277,26 +281,75 @@ public class AlertaService {
         }
     }
     
-    // ================ MÉTODO PRINCIPAL ================
+    // ================ MÉTODO PRINCIPAL (AGORA ASSÍNCRONO) ================
     
+    /**
+     * Método principal agora é assíncrono e retorna CompletableFuture
+     */
+    @Async("alertaTaskExecutor")
     @Transactional
-    public void processarTelemetria(Telemetria telemetria) {
-        if (telemetria == null || telemetria.getVeiculo() == null) return;
+    public CompletableFuture<String> processarTelemetria(Telemetria telemetria) {
+        if (telemetria == null || telemetria.getVeiculo() == null) {
+            return CompletableFuture.completedFuture("Telemetria inválida");
+        }
         
-        // Buscar viagem ativa do veículo
-        Viagem viagemAtiva = viagemRepository.findByVeiculoAndStatus(
-            telemetria.getVeiculo(), "EM_ANDAMENTO").orElse(null);
+        long inicio = System.currentTimeMillis();
+        String threadName = Thread.currentThread().getName();
+        System.out.println("🔄 [Thread: " + threadName + "] Iniciando processamento assíncrono de alertas");
         
-        // Verificar todos os tipos de alerta
-        verificarExcessoVelocidade(telemetria);
-        verificarVelocidadeBaixa(telemetria, viagemAtiva);
-        verificarNivelCombustivel(telemetria, viagemAtiva);
-        
-        // Atualizar status de alertas resolvidos
-        resolverAlertas(telemetria);
+        try {
+            // Buscar viagem ativa do veículo
+            Viagem viagemAtiva = viagemRepository.findByVeiculoAndStatus(
+                telemetria.getVeiculo(), "EM_ANDAMENTO").orElse(null);
+            
+            // Verificar todos os tipos de alerta (tudo continua igual)
+            verificarExcessoVelocidade(telemetria);
+            verificarVelocidadeBaixa(telemetria, viagemAtiva);
+            verificarNivelCombustivel(telemetria, viagemAtiva);
+            
+            // Verificações adicionais que podem ser feitas assincronamente
+            verificarGpsSemSinal(telemetria.getVeiculo(), telemetria);
+            
+            if (viagemAtiva != null) {
+                verificarTempoDirecao(viagemAtiva, telemetria);
+                verificarAtrasoViagem(viagemAtiva, telemetria);
+            }
+            
+            // Atualizar status de alertas resolvidos
+            resolverAlertas(telemetria);
+            
+            long fim = System.currentTimeMillis();
+            System.out.println("✅ [Thread: " + threadName + "] Alertas processados em " + (fim - inicio) + "ms");
+            
+            return CompletableFuture.completedFuture("Alertas processados com sucesso");
+            
+        } catch (Exception e) {
+            System.err.println("❌ [Thread: " + threadName + "] Erro no processamento: " + e.getMessage());
+            e.printStackTrace();
+            return CompletableFuture.failedFuture(e);
+        }
     }
     
-    // ================ MÉTODOS AUXILIARES ================
+    /**
+     * Versão que processa múltiplas telemetrias em paralelo
+     */
+    @Async("alertaTaskExecutor")
+    public CompletableFuture<List<String>> processarMultiplasTelemetrias(List<Telemetria> telemetrias) {
+        return CompletableFuture.supplyAsync(() -> {
+            return telemetrias.stream()
+                .map(t -> {
+                    try {
+                        processarTelemetria(t).join();
+                        return "Sucesso: " + t.getId();
+                    } catch (Exception e) {
+                        return "Erro: " + t.getId() + " - " + e.getMessage();
+                    }
+                })
+                .toList();
+        });
+    }
+    
+    // ================ MÉTODOS AUXILIARES (mantidos iguais) ================
     
     private void criarAlerta(Veiculo veiculo, Motorista motorista, Viagem viagem,
                              String tipo, String gravidade, String mensagem,
@@ -319,8 +372,8 @@ public class AlertaService {
         
         alertaRepository.save(alerta);
         
-        // Aqui pode ser adicionar notificação em tempo real (WebSocket)
-        System.out.println("🚨 ALERTA GERADO: " + mensagem);
+        String threadName = Thread.currentThread().getName();
+        System.out.println("🚨 [Thread: " + threadName + "] ALERTA GERADO: " + mensagem);
     }
     
     private void resolverAlertas(Telemetria telemetria) {

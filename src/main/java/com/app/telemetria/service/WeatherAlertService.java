@@ -3,15 +3,22 @@ package com.app.telemetria.service;
 import com.app.telemetria.entity.Alerta;
 import com.app.telemetria.entity.Veiculo;
 import com.app.telemetria.entity.Viagem;
+import com.app.telemetria.exception.WeatherApiException;
 import com.app.telemetria.repository.AlertaRepository;
 import com.app.telemetria.repository.VeiculoRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
-import java.time.LocalDateTime;
+
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -26,16 +33,18 @@ public class WeatherAlertService {
     @Value("${openweather.api.key}")
     private String apiKey;
     
-    // ========== CONSTRUTOR CORRIGIDO ==========
+    // ========== CONSTRUTOR ==========
     public WeatherAlertService(AlertaRepository alertaRepository, VeiculoRepository veiculoRepository) {
         this.alertaRepository = alertaRepository;
         this.veiculoRepository = veiculoRepository;
         this.webClient = WebClient.builder()
             .baseUrl("https://api.openweathermap.org/data/2.5")
             .build();
+        
+        System.out.println("🌦️ WeatherAlertService inicializado");
     }
     
-    // ========== ENUMS PARA ORGANIZAR TUDO ==========
+    // ========== ENUMS ==========
     
     private enum CondicaoClimatica {
         CHUVA_FRACA(500, "Chuva fraca", "🌧️", "MEDIA"),
@@ -137,23 +146,88 @@ public class WeatherAlertService {
     // ========== MÉTODO PRINCIPAL ==========
     
     public void verificarClimaParaVeiculo(Long veiculoId, Double latitude, Double longitude, Viagem viagem) {
-        if (latitude == null || longitude == null) return;
+        System.out.println("🌤️ Verificando clima para veículo " + veiculoId + " em (" + latitude + ", " + longitude + ")");
+        
+        if (latitude == null || longitude == null) {
+            System.out.println("⚠️ Coordenadas inválidas para veículo " + veiculoId);
+            return;
+        }
         
         // Verificar limite de 1 hora
         if (ultimoAlertaPorVeiculo.getOrDefault(veiculoId, LocalDateTime.MIN)
             .plusHours(1).isAfter(LocalDateTime.now())) {
+            System.out.println("⏰ Último alerta foi há menos de 1 hora para veículo " + veiculoId);
             return;
         }
         
         veiculoRepository.findById(veiculoId).ifPresent(veiculo -> {
-            getWeatherForLocation(latitude, longitude).subscribe(weather -> {
-                String mensagem = gerarMensagemClimatica(weather);
-                String gravidade = determinarGravidade(weather);
+            try {
+                // Chamada com retry automático
+                WeatherResponse weather = getWeatherWithRetry(latitude, longitude);
                 
-                criarAlertaClimatico(veiculo, viagem, mensagem, gravidade);
-                ultimoAlertaPorVeiculo.put(veiculoId, LocalDateTime.now());
-            });
+                if (weather != null) {
+                    String mensagem = gerarMensagemClimatica(weather);
+                    String gravidade = determinarGravidade(weather);
+                    
+                    criarAlertaClimatico(veiculo, viagem, mensagem, gravidade);
+                    ultimoAlertaPorVeiculo.put(veiculoId, LocalDateTime.now());
+                    
+                    System.out.println("✅ Alerta climático gerado para veículo " + veiculoId);
+                }
+            } catch (Exception e) {
+                System.err.println("❌ Falha ao obter dados climáticos após retries: " + e.getMessage());
+            }
         });
+    }
+    
+    /**
+     * MÉTODO COM RETRY + BACKOFF EXPONENCIAL
+     * Tenta até 5 vezes com delays: 2s, 4s, 8s, 16s, 32s
+     */
+    @Retryable(
+        retryFor = { RestClientException.class, TimeoutException.class, WeatherApiException.class },
+        maxAttempts = 5,
+        backoff = @Backoff(
+            delay = 2000,        // 2 segundos na primeira tentativa
+            multiplier = 2.0,     // dobra a cada tentativa: 2,4,8,16,32
+            maxDelay = 30000      // máximo de 30 segundos
+        ),
+        recover = "recoverWeatherApi"
+    )
+    public WeatherResponse getWeatherWithRetry(double lat, double lon) {
+        System.out.println("🔄 Consultando OpenWeatherMap para coordenadas: " + lat + ", " + lon);
+        
+        // Chamada síncrona com timeout
+        return getWeatherForLocation(lat, lon)
+            .timeout(Duration.ofSeconds(5))
+            .doOnSuccess(weather -> System.out.println("✅ Consulta à OpenWeatherMap bem-sucedida"))
+            .doOnError(e -> System.err.println("❌ Erro na consulta: " + e.getMessage()))
+            .block(); // Aguarda o resultado (é síncrono)
+    }
+    
+    /**
+     * Método de recuperação quando todas as tentativas falham
+     */
+    @Recover
+    public WeatherResponse recoverWeatherApi(Exception e, double lat, double lon) {
+        System.err.println("⚠️ Todas as " + 5 + " tentativas falharam. Usando fallback para coordenadas: " + lat + ", " + lon);
+        System.err.println("Erro: " + e.getMessage());
+        
+        return criarRespostaFallback(lat, lon);
+    }
+    
+    public Mono<WeatherResponse> getWeatherForLocation(double lat, double lon) {
+        return webClient.get()
+            .uri(uriBuilder -> uriBuilder
+                .path("/weather")
+                .queryParam("lat", lat)
+                .queryParam("lon", lon)
+                .queryParam("appid", apiKey)
+                .queryParam("units", "metric")
+                .queryParam("lang", "pt_br")
+                .build())
+            .retrieve()
+            .bodyToMono(WeatherResponse.class);
     }
     
     private String gerarMensagemClimatica(WeatherResponse weather) {
@@ -256,6 +330,8 @@ public class WeatherAlertService {
     }
     
     private void criarAlertaClimatico(Veiculo veiculo, Viagem viagem, String mensagem, String gravidade) {
+        System.out.println("📝 Criando alerta climático para veículo " + veiculo.getId() + " - Gravidade: " + gravidade);
+        
         Alerta alerta = new Alerta();
         alerta.setVeiculo(veiculo);
         alerta.setMotorista(viagem != null ? viagem.getMotorista() : null);
@@ -269,19 +345,23 @@ public class WeatherAlertService {
         
         alertaRepository.save(alerta);
         System.out.println("🚨 [" + gravidade + "] " + mensagem);
+        System.out.println("✅ Alerta climático salvo no banco de dados");
     }
     
-    public Mono<WeatherResponse> getWeatherForLocation(double lat, double lon) {
-        return webClient.get()
-            .uri(uriBuilder -> uriBuilder
-                .path("/weather")
-                .queryParam("lat", lat)
-                .queryParam("lon", lon)
-                .queryParam("appid", apiKey)
-                .queryParam("units", "metric")
-                .queryParam("lang", "pt_br")
-                .build())
-            .retrieve()
-            .bodyToMono(WeatherResponse.class);
+    /**
+     * Cria uma resposta fallback quando a API está indisponível
+     */
+    private WeatherResponse criarRespostaFallback(double lat, double lon) {
+        System.out.println("🔄 Criando resposta fallback para coordenadas: " + lat + ", " + lon);
+        
+        // Criar um objeto WeatherResponse com dados simulados
+        WeatherResponse.Weather weather = new WeatherResponse.Weather(800, "Clear", "céu limpo", "01d");
+        WeatherResponse.Weather[] weathers = {weather};
+        
+        WeatherResponse.Main main = new WeatherResponse.Main(20.0, 65);
+        WeatherResponse.Wind wind = new WeatherResponse.Wind(5.0, 0);
+        WeatherResponse.Clouds clouds = new WeatherResponse.Clouds(10);
+        
+        return new WeatherResponse(weathers, main, wind, null, null, clouds);
     }
 }

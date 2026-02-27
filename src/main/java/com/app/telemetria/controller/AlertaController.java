@@ -4,6 +4,8 @@ import com.app.telemetria.entity.Alerta;
 import com.app.telemetria.entity.Veiculo;
 import com.app.telemetria.repository.AlertaRepository;
 import com.app.telemetria.service.VeiculoService;
+import com.app.telemetria.exception.ErrorCode;
+import com.app.telemetria.exception.BusinessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -37,6 +39,8 @@ public class AlertaController {
     @GetMapping("/veiculo/{veiculoId}")
     public List<Alerta> listarPorVeiculo(@PathVariable Long veiculoId) {
 
+        veiculoService.buscarPorId(veiculoId);
+        
         Veiculo veiculo = new Veiculo();
         veiculo.setId(veiculoId);
         return alertaRepository.findByVeiculoOrderByDataHoraDesc(veiculo);
@@ -66,7 +70,10 @@ public class AlertaController {
     @PutMapping("/{id}/ler")
     public Alerta marcarComoLido(@PathVariable Long id) {
         Alerta alerta = alertaRepository.findById(id)
-            .orElseThrow(() -> new RuntimeException("Alerta não encontrado com id: " + id));
+            .orElseThrow(() -> new BusinessException(
+                ErrorCode.ALERTA_NOT_FOUND,
+                id.toString()
+            ));
         alerta.setLido(true);
         alerta.setDataHoraLeitura(LocalDateTime.now());
         return alertaRepository.save(alerta);
@@ -75,7 +82,10 @@ public class AlertaController {
     @PutMapping("/{id}/resolver")
     public Alerta resolverAlerta(@PathVariable Long id) {
         Alerta alerta = alertaRepository.findById(id)
-            .orElseThrow(() -> new RuntimeException("Alerta não encontrado com id: " + id));
+            .orElseThrow(() -> new BusinessException(
+                ErrorCode.ALERTA_NOT_FOUND,
+                id.toString()
+            ));
         alerta.setResolvido(true);
         alerta.setDataHoraResolucao(LocalDateTime.now());
         return alertaRepository.save(alerta);
@@ -85,6 +95,12 @@ public class AlertaController {
     public List<Alerta> listarPorPeriodo(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime inicio,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fim) {
+        
+        if (inicio.isAfter(fim)) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                "Data de início não pode ser posterior à data de fim");
+        }
+        
         return alertaRepository.findByPeriodo(inicio, fim);
     }
 }

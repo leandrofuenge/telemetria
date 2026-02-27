@@ -34,7 +34,6 @@ public interface ViagemRepository extends JpaRepository<Viagem, Long> {
     // Outros métodos úteis
     Optional<Viagem> findByVeiculoIdAndStatusOrderByDataInicioDesc(Long veiculoId, String status);
     
-    
     Optional<Viagem> findByMotoristaIdAndStatus(Long motoristaId, String status); 
     
 }

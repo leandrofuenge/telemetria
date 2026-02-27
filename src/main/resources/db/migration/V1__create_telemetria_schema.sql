@@ -176,10 +176,26 @@ CREATE TABLE manutencoes (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =========================================
+-- TABELA: cache geocoding
+-- =========================================
+CREATE TABLE geocoding_cache (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    latitude DOUBLE NOT NULL,
+    longitude DOUBLE NOT NULL,
+    is_urbano BOOLEAN NOT NULL,
+    nome_local VARCHAR(255),
+    tipo_local VARCHAR(50),
+    pais VARCHAR(100),
+    estado VARCHAR(100),
+    cidade VARCHAR(200),
+    data_consulta DATETIME NOT NULL,
+    precisao_metros INT,
+    INDEX idx_coordenadas (latitude, longitude),
+    INDEX idx_data_consulta (data_consulta)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
 -- TABELA: viagens
--- =========================================
--- =========================================
--- TABELA: viagens (COMPLETA)
 -- =========================================
 CREATE TABLE viagens (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
