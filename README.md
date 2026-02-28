@@ -206,6 +206,7 @@ Implementado para operar em ambientes adversos:
 ✔ Arquitetura escalável\
 ✔ Preparado para crescimento
 
+------------------------------------------------------------------------
 
 ## Relatório Técnico – Sistema de Telemetria para Frotas de Caminhões
 
