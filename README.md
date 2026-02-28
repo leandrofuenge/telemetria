@@ -205,3 +205,73 @@ Implementado para operar em ambientes adversos:
 ✔ MVP robusto\
 ✔ Arquitetura escalável\
 ✔ Preparado para crescimento
+
+
+## Relatório Técnico – Sistema de Telemetria para Frotas de Caminhões
+
+Este projeto tem como objetivo propor e implementar uma arquitetura escalável para um sistema de telemetria voltado a empresas de transporte rodoviário, permitindo o monitoramento eficiente de grandes volumes de dados provenientes de dispositivos embarcados em caminhões.
+
+### 1. Processamento Concorrente
+
+Foi implementado um modelo baseado em **threads**, possibilitando a execução paralela de múltiplas tarefas dentro do mesmo processo. Essa abordagem melhora significativamente:
+
+- O desempenho geral do sistema
+    
+- A responsividade das requisições
+    
+- A eficiência no uso de recursos computacionais
+    
+
+### 2. Processamento Assíncrono e Fila de Execução
+
+Também foi adotado o **processamento assíncrono** para execução de tarefas de longa duração, como o tratamento e análise dos dados telemétricos enviados pelos dispositivos embarcados.
+
+Considerando um cenário com até 100.000 caminhões transmitindo dados simultaneamente, a arquitetura foi projetada para evitar sobrecarga imediata do sistema. Para isso, foi implementado um mecanismo de fila de processamento, permitindo o desacoplamento entre a ingestão dos dados e seu processamento efetivo.
+
+Essa estratégia evita gargalos e mantém a estabilidade mesmo sob alta taxa de eventos.
+
+### 3. Streaming de Eventos
+
+Para suportar alto volume de dados em tempo real, foi integrado o Apache Kafka como plataforma de streaming distribuído.
+
+O uso do Kafka permite:
+
+- Alta taxa de throughput (milhões de eventos)
+    
+- Escalabilidade horizontal
+    
+- Persistência confiável dos eventos
+    
+- Processamento paralelo por meio de particionamento
+    
+
+Essa abordagem é adequada para sistemas de telemetria que exigem ingestão contínua e processamento distribuído.
+
+### 4. Cache em Memória
+
+Foi implementado o Redis como mecanismo de cache em memória.
+
+Em funções de pré-processamento, como `preprocessarDadosUrbanos`, o sistema consulta primeiramente o Redis antes de acessar o banco de dados relacional. Isso reduz:
+
+- Latência de resposta
+    
+- Carga no banco de dados
+    
+- Reprocessamento desnecessário
+    
+
+Essa estratégia melhora significativamente o desempenho em cenários de alta leitura.
+
+### 5. Controle de Fluxo (Rate Limiting)
+
+Foi implementado um mecanismo de **rate limiting**, responsável por controlar a quantidade de requisições ou eventos permitidos dentro de um intervalo de tempo específico.
+
+Esse mecanismo garante:
+
+- Proteção contra sobrecarga
+    
+- Estabilidade operacional
+    
+- Controle de fluxo
+    
+- Isolamento de falhas causadas por dispositivos com comportamento anômalo
