@@ -193,11 +193,7 @@ public class DetectorDesvioRotaService {
         System.out.println(mensagem);
     }
     
-    // Método para obter pontos da rota (e necessario implementacao)
     private List<PontoRota> obterPontosRota(Rota rota) {
-        // Aqui  deve retornar a lista de pontos que compõem a rota
-        // Pode vir de uma API de mapas (Google Maps, OpenStreetMap)
-        // ou ser calculada baseada na origem/destino
         return geocodingService.obterPontosRota(rota);
     }
 }

@@ -10,6 +10,9 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.time.LocalDateTime;
 import java.time.Duration;
@@ -23,6 +26,9 @@ public class AlertaService {
     private final AlertaRepository alertaRepository;
     private final VeiculoRepository veiculoRepository;
     private final ViagemRepository viagemRepository;
+    private final LocationClassifierService locationClassifierService;
+    private final SimpMessagingTemplate messagingTemplate;
+
     
     // Configurações
     private static final double VELOCIDADE_MAXIMA = 110.0; // km/h
@@ -34,10 +40,15 @@ public class AlertaService {
     public AlertaService(
             AlertaRepository alertaRepository,
             VeiculoRepository veiculoRepository,
-            ViagemRepository viagemRepository) {
+            ViagemRepository viagemRepository,
+            LocationClassifierService locationClassifierService,
+            SimpMessagingTemplate messagingTemplate) {
+    	
         this.alertaRepository = alertaRepository;
         this.veiculoRepository = veiculoRepository;
         this.viagemRepository = viagemRepository;
+        this.locationClassifierService = locationClassifierService;
+        this.messagingTemplate = messagingTemplate;
     }
     
     // ================ ALERTAS DE VELOCIDADE ================
@@ -391,8 +402,41 @@ public class AlertaService {
     }
     
     private boolean verificarAreaUrbana(Double latitude, Double longitude) {
-        // Implementar lógica para verificar se está em área urbana
-        // Pode usar API de mapas ou coordenadas pré-definidas
-        return false; // Simplificado
+        
+    	if (latitude  == null || longitude == null) return false;
+    
+    	 try {
+             String classificacao =
+                     locationClassifierService.classify(latitude, longitude);
+             
+             return "AREA_URBANA".equals(classificacao);
+    		    		
+    	} catch (Exception e) {
+    		System.err.println("Erro ao verificar area urbana: " + e.getMessage());
+    		return false;
+    	}
+    }
+    
+    @Transactional
+    public void verificarAreaUrbanaEAvisar(
+    		Double latitude,
+    		Double longitude,
+    		String placaVeiculo) {
+    	
+    	boolean urbana = verificarAreaUrbana(latitude, longitude);
+    	
+    	if (urbana) {
+    		
+    		String mensagem = "Veiculo" + placaVeiculo + "entrou em area urbana";
+    		
+    		// salvar no banco 
+    		
+    	  messagingTemplate.convertAndSend(
+    			  "/topic/alertas",
+    			  mensagem
+    	  );
+    		
+    	  System.out.println("WebSocket enviado:" + mensagem);
+    	}
     }
 }
