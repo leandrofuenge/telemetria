@@ -276,3 +276,279 @@ Esse mecanismo garante:
 - Controle de fluxo
     
 - Isolamento de falhas causadas por dispositivos com comportamento anômalo
+
+
+# 📘 Relatório Técnico
+
+## Sistema de Telemetria para Frotas de Caminhões com Integração ao OSRM
+
+---
+
+# 1️⃣ Visão Geral do OSRM
+
+O **OSRM (Open Source Routing Machine)** é um motor de cálculo de rotas open-source baseado nos dados do:
+
+➡ OpenStreetMap
+
+Ele fornece funcionalidades similares a serviços como Google Maps e Mapbox, porém com a vantagem de ser **self-hosted** e sem limites comerciais quando executado em infraestrutura própria.
+
+### Principais funcionalidades
+
+- ✔ Cálculo da melhor rota
+    
+- ✔ Distância total
+    
+- ✔ Tempo estimado (ETA)
+    
+- ✔ Geometria detalhada da via (GeoJSON)
+    
+- ✔ Snap-to-road
+    
+- ✔ Map Matching
+    
+- ✔ Matriz de distâncias (table)
+    
+
+---
+
+# 2️⃣ Funcionamento Interno
+
+O fluxo de processamento do OSRM ocorre em seis etapas principais:
+
+1. Download do mapa em formato `.osm.pbf`
+    
+2. Execução do `osrm-extract`
+    
+3. Aplicação de perfil de roteamento (ex: `car.lua`)
+    
+4. Execução do `osrm-contract` (Hierarquia de Contração - CH)
+    
+5. Inicialização do servidor (`osrm-routed`)
+    
+6. Consumo via API HTTP
+    
+
+### Pipeline técnico
+
+OSM (.pbf)  
+   ↓  
+Extract  
+   ↓  
+Contract (CH)  
+   ↓  
+Servidor HTTP  
+   ↓  
+Backend Telemetria
+
+---
+
+# 3️⃣ Exemplo de Chamada HTTP
+
+### Endpoint:
+
+GET /route/v1/driving/lon1,lat1;lon2,lat2
+
+### Exemplo público:
+
+https://router.project-osrm.org/route/v1/driving/-56.0974,-15.6014;-56.1200,-15.6500?overview=full&geometries=geojson
+
+### Resposta simplificada:
+
+{  
+  "routes": [  
+    {  
+      "distance": 12450.3,  
+      "duration": 845.2,  
+      "geometry": {  
+        "coordinates": [  
+          [-56.0974, -15.6014],  
+          [-56.0980, -15.6020]  
+        ]  
+      }  
+    }  
+  ]  
+}
+
+---
+
+# 4️⃣ Aplicação no Sistema de Telemetria
+
+Integração direta com o serviço de detecção de desvio de rota.
+
+## Problema tradicional
+
+Sem motor de roteamento:
+
+- Comparação por linha reta
+    
+- Falsos positivos de desvio
+    
+- GPS impreciso
+    
+- Dificuldade em calcular ETA real
+    
+
+## Com OSRM integrado
+
+✔ Rota real baseada na malha viária  
+✔ Snap do veículo à via correta  
+✔ Cálculo preciso de ETA  
+✔ Detecção real de desvio  
+✔ Correção de ruído de GPS
+
+---
+
+# 5️⃣ Principais Modos de Operação
+
+## 🔹 1. `route`
+
+Calcula rota entre dois ou mais pontos.
+
+Uso principal:
+
+- ETA
+    
+- Planejamento
+    
+- Visualização de trajeto
+    
+
+---
+
+## 🔹 2. `nearest`
+
+Retorna a via mais próxima de uma coordenada.
+
+Uso principal:
+
+- Snap-to-road
+    
+- Correção de erro de GPS
+    
+
+---
+
+## 🔹 3. `match` (Map Matching)
+
+Endpoint:
+
+/match/v1/driving/lon1,lat1;lon2,lat2;lon3,lat3
+
+Função:
+
+- Ajusta sequência de pontos GPS na via correta
+    
+
+Aplicação crítica para telemetria:
+
+✔ Corrige imprecisão de GPS  
+✔ Evita falsos alertas de desvio  
+✔ Reconstrói trajetória real  
+✔ Base para auditoria de percurso
+
+Esse é o modo mais poderoso para frotas.
+
+---
+
+# 6️⃣ Arquitetura Recomendada
+
+### Estrutura modular
+
+[Dispositivos GPS]  
+        ↓  
+[Telemetria Service]  
+        ↓  
+[Roteamento Service]  
+        ↓  
+[OSRM]
+
+Separar o roteamento em microserviço permite:
+
+- Escalabilidade independente
+    
+- Cache dedicado
+    
+- Controle de carga
+    
+- Evolução futura (ex: perfis caminhão pesado)
+    
+
+---
+
+# 7️⃣ Requisitos de Infraestrutura
+
+O OSRM carrega em memória:
+
+- Grafo da malha viária
+    
+- Índices espaciais (R-tree)
+    
+- Hierarquia de contração
+    
+
+### RAM impacta diretamente:
+
+- Latência
+    
+- Throughput
+    
+- Estabilidade
+    
+
+### Porém, RAM não é suficiente
+
+Também é necessário:
+
+- CPU multi-core (8–32 cores ideal)
+    
+- SSD NVMe
+    
+- Backend assíncrono
+    
+- Pool de conexões HTTP otimizado
+    
+- Estratégia de cache
+    
+
+---
+
+# 8️⃣ Escalabilidade
+
+Para suportar ~1000 veículos simultâneos:
+
+Recomenda-se:
+
+- Cache Redis para rotas repetidas
+    
+- Rate limiting interno
+    
+- Monitoramento (CPU/RAM)
+    
+- Instâncias paralelas do OSRM
+    
+- Balanceador de carga
+    
+
+---
+
+# 9️⃣ Conclusão Técnica
+
+A integração do OSRM transforma o sistema de telemetria de:
+
+> Rastreamento básico
+
+Para:
+
+> Plataforma inteligente de análise logística
+
+Ele possibilita:
+
+- Monitoramento avançado
+    
+- Detecção precisa de desvio
+    
+- Cálculo real de desempenho operacional
+    
+- Base tecnológica para expansão comercial
+
+
