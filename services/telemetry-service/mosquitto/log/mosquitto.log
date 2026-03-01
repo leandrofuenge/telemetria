@@ -335,3 +335,12 @@
 1772325360: mosquitto version 2.1.2 running
 1772325381: mosquitto version 2.1.2 terminating
 1772325381: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1772346383: mosquitto version 2.1.2 starting
+1772346383: Config loaded from /mosquitto/config/mosquitto.conf.
+1772346383: Bridge support available.
+1772346383: Persistence support available.
+1772346383: TLS support available.
+1772346383: TLS-PSK support available.
+1772346383: Websockets support available.
+1772346383: Opening ipv4 listen socket on port 1883.
+1772346383: mosquitto version 2.1.2 running

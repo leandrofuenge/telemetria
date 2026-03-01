@@ -14,9 +14,9 @@ public class AsyncConfig {
 	@Bean(name = "alertaTaskExecutor")
 	public Executor alertaTaskExecutor() {
 		ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-		executor.setCorePoolSize(1);  // Threads mínimas
-		executor.setMaxPoolSize(1); // Threads máximas
-		executor.setQueueCapacity(100); // Capacidade da fila
+		executor.setCorePoolSize(4);  // Threads mínimas
+		executor.setMaxPoolSize(8); // Threads máximas
+		executor.setQueueCapacity(200); // Capacidade da fila
 		executor.setThreadNamePrefix("AlertaAsync-");
 		executor.initialize();
 		return executor;
