@@ -67,7 +67,7 @@ services:
       retries: 5
 
   # =========================================
-  # REDIS INSIGHT (Interface Gráfica para Redis)
+  # REDIS INSIGHT
   # =========================================
   redis-insight:
     image: redis/redisinsight:latest
@@ -226,15 +226,15 @@ services:
       SPRING_DATA_REDIS_LETTUCE_POOL_MAX_IDLE: 8
       SPRING_DATA_REDIS_LETTUCE_POOL_MIN_IDLE: 0
       
-      # OpenWeather (chave via .env)
-      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY}
-      OPENWEATHER_API_URL: "https://api.openweathermap.org/data/2.5/weather"
-      OPENWEATHER_API_UNITS: "metric"
-      OPENWEATHER_API_LANG: "pt_br"
+      # OpenWeather 
+      OPENWEATHER_API_KEY: 
+      OPENWEATHER_API_URL: https://api.openweathermap.org/data/2.5/weather
+      OPENWEATHER_API_UNITS: metric
+      OPENWEATHER_API_LANG: pt_br
       
-      # IPLocate (chave via .env)
-      IPLOCATE_API_KEY: ${IPLOCATE_API_KEY}
-      IPLOCATE_API_URL: "https://iplocate.io/api/lookup"
+      # IPLocate
+      IPLOCATE_API_KEY: 
+      IPLOCATE_API_URL: https://iplocate.io/api/lookup
       
       # MQTT
       MQTT_BROKER_URL: tcp://emqx:1883
@@ -245,10 +245,18 @@ services:
       JWT_SECRET: MinhaChaveSuperSeguraMuitoForte1234
       JWT_EXPIRATION: 3600000
       JWT_REFRESH_EXPIRATION: 86400000
+      
+      # Logging para debug
+      LOGGING_LEVEL_COM_APP_TELEMETRIA: DEBUG
     volumes:
       - ./logs:/app/logs
     networks:
       - telemetria-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # =========================================
   # MOSQUITTO (OPCIONAL)

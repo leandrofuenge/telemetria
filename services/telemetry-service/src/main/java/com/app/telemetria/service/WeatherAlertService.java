@@ -13,8 +13,10 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
+import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -30,8 +32,17 @@ public class WeatherAlertService {
     private final VeiculoRepository veiculoRepository;
     private final Map<Long, LocalDateTime> ultimoAlertaPorVeiculo = new HashMap<>();
     
-    @Value("${openweather.api.key}")
+    @Value("${openweather.api.key:}")
     private String apiKey;
+    
+    @Value("${openweather.api.url:https://api.openweathermap.org/data/2.5}")
+    private String apiBaseUrl;
+    
+    @Value("${openweather.api.units:metric}")
+    private String units;
+    
+    @Value("${openweather.api.lang:pt_br}")
+    private String lang;
     
     // ========== CONSTRUTOR ==========
     public WeatherAlertService(AlertaRepository alertaRepository, VeiculoRepository veiculoRepository) {
@@ -42,6 +53,30 @@ public class WeatherAlertService {
             .build();
         
         System.out.println("🌦️ WeatherAlertService inicializado");
+    }
+    
+    @PostConstruct
+    public void init() {
+        System.out.println("\n🌤️ ===== CONFIGURAÇÃO DO OPENWEATHER ===== 🌤️");
+        
+        if (apiKey == null || apiKey.isEmpty()) {
+            System.err.println("❌ API KEY DO OPENWEATHER NÃO CONFIGURADA!");
+            System.err.println("📝 Configure em application.properties: openweather.api.key=SUA_CHAVE");
+            System.err.println("🔑 Chave atual: '" + apiKey + "'");
+        } else {
+            System.out.println("✅ API Key configurada: " + apiKey.substring(0, Math.min(5, apiKey.length())) + "...");
+            System.out.println("📊 Tamanho da chave: " + apiKey.length() + " caracteres");
+            System.out.println("🌐 URL Base: " + apiBaseUrl);
+            System.out.println("📏 Unidades: " + units);
+            System.out.println("🗣️ Idioma: " + lang);
+            
+            // Testar se a chave tem o formato correto
+            if (apiKey.length() != 32) {
+                System.err.println("⚠️ ATENÇÃO: A chave API parece ter tamanho diferente do esperado (32 caracteres)");
+                System.err.println("⚠️ Tamanho atual: " + apiKey.length() + " caracteres");
+            }
+        }
+        System.out.println("==========================================\n");
     }
     
     // ========== ENUMS ==========
@@ -153,6 +188,12 @@ public class WeatherAlertService {
             return;
         }
         
+        // Verificar se API key está configurada
+        if (apiKey == null || apiKey.isEmpty()) {
+            System.err.println("❌ API Key não configurada! Pulando verificação climática.");
+            return;
+        }
+        
         // Verificar limite de 1 hora
         if (ultimoAlertaPorVeiculo.getOrDefault(veiculoId, LocalDateTime.MIN)
             .plusHours(1).isAfter(LocalDateTime.now())) {
@@ -165,7 +206,7 @@ public class WeatherAlertService {
                 // Chamada com retry automático
                 WeatherResponse weather = getWeatherWithRetry(latitude, longitude);
                 
-                if (weather != null) {
+                if (weather != null && weather.weather() != null && weather.weather().length > 0) {
                     String mensagem = gerarMensagemClimatica(weather);
                     String gravidade = determinarGravidade(weather);
                     
@@ -173,6 +214,8 @@ public class WeatherAlertService {
                     ultimoAlertaPorVeiculo.put(veiculoId, LocalDateTime.now());
                     
                     System.out.println("✅ Alerta climático gerado para veículo " + veiculoId);
+                } else {
+                    System.out.println("⚠️ Resposta da API sem dados climáticos válidos");
                 }
             } catch (Exception e) {
                 System.err.println("❌ Falha ao obter dados climáticos após retries: " + e.getMessage());
@@ -185,7 +228,7 @@ public class WeatherAlertService {
      * Tenta até 5 vezes com delays: 2s, 4s, 8s, 16s, 32s
      */
     @Retryable(
-        retryFor = { RestClientException.class, TimeoutException.class, WeatherApiException.class },
+        retryFor = { RestClientException.class, TimeoutException.class, WeatherApiException.class, WebClientResponseException.class },
         maxAttempts = 5,
         backoff = @Backoff(
             delay = 2000,        // 2 segundos na primeira tentativa
@@ -197,11 +240,22 @@ public class WeatherAlertService {
     public WeatherResponse getWeatherWithRetry(double lat, double lon) {
         System.out.println("🔄 Consultando OpenWeatherMap para coordenadas: " + lat + ", " + lon);
         
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new WeatherApiException("API Key não configurada");
+        }
+        
         // Chamada síncrona com timeout
         return getWeatherForLocation(lat, lon)
-            .timeout(Duration.ofSeconds(5))
+            .timeout(Duration.ofSeconds(10))
             .doOnSuccess(weather -> System.out.println("✅ Consulta à OpenWeatherMap bem-sucedida"))
-            .doOnError(e -> System.err.println("❌ Erro na consulta: " + e.getMessage()))
+            .doOnError(e -> {
+                if (e instanceof WebClientResponseException.Unauthorized) {
+                    System.err.println("❌ Erro 401: API Key inválida ou não autorizada");
+                    System.err.println("🔑 Chave atual: " + apiKey.substring(0, Math.min(5, apiKey.length())) + "...");
+                } else {
+                    System.err.println("❌ Erro na consulta: " + e.getMessage());
+                }
+            })
             .block(); // Aguarda o resultado (é síncrono)
     }
     
@@ -210,24 +264,36 @@ public class WeatherAlertService {
      */
     @Recover
     public WeatherResponse recoverWeatherApi(Exception e, double lat, double lon) {
-        System.err.println("⚠️ Todas as " + 5 + " tentativas falharam. Usando fallback para coordenadas: " + lat + ", " + lon);
-        System.err.println("Erro: " + e.getMessage());
+        System.err.println("⚠️ Todas as 5 tentativas falharam. Usando fallback para coordenadas: " + lat + ", " + lon);
+        System.err.println("Erro: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+        
+        if (e instanceof WebClientResponseException.Unauthorized) {
+            System.err.println("🔑 PROVIDENCIE: Configure a API key correta no application.properties");
+        }
         
         return criarRespostaFallback(lat, lon);
     }
     
     public Mono<WeatherResponse> getWeatherForLocation(double lat, double lon) {
+        System.out.println("🔑 Usando API Key: " + (apiKey != null ? apiKey.substring(0, Math.min(5, apiKey.length())) + "..." : "NÃO CONFIGURADA"));
+        
         return webClient.get()
             .uri(uriBuilder -> uriBuilder
                 .path("/weather")
                 .queryParam("lat", lat)
                 .queryParam("lon", lon)
-                .queryParam("appid", apiKey)
-                .queryParam("units", "metric")
-                .queryParam("lang", "pt_br")
+                .queryParam("appid", apiKey != null ? apiKey.trim() : "")
+                .queryParam("units", units)
+                .queryParam("lang", lang)
                 .build())
             .retrieve()
-            .bodyToMono(WeatherResponse.class);
+            .bodyToMono(WeatherResponse.class)
+            .onErrorResume(WebClientResponseException.Unauthorized.class, e -> {
+                System.err.println("❌ ERRO 401: API Key inválida!");
+                System.err.println("🔑 Sua chave: '" + apiKey + "'");
+                System.err.println("📝 Verifique se a chave está correta no application.properties");
+                return Mono.error(new WeatherApiException("API Key inválida: 401 Unauthorized"));
+            });
     }
     
     private String gerarMensagemClimatica(WeatherResponse weather) {
@@ -354,14 +420,55 @@ public class WeatherAlertService {
     private WeatherResponse criarRespostaFallback(double lat, double lon) {
         System.out.println("🔄 Criando resposta fallback para coordenadas: " + lat + ", " + lon);
         
-        // Criar um objeto WeatherResponse com dados simulados
-        WeatherResponse.Weather weather = new WeatherResponse.Weather(800, "Clear", "céu limpo", "01d");
+        // Determinar clima baseado na localização (fallback inteligente)
+        String condicao;
+        int codigo;
+        String descricao;
+        
+        // Região de São Paulo geralmente tem clima temperado
+        if (lat > -24.0 && lat < -23.0 && lon > -47.0 && lon < -46.0) {
+            condicao = "Clouds";
+            codigo = 801;
+            descricao = "nublado";
+        } 
+        // Região costeira
+        else if (lon < -46.0 && lon > -48.0) {
+            condicao = "Clear";
+            codigo = 800;
+            descricao = "céu limpo";
+        }
+        // Região interior
+        else {
+            condicao = "Clear";
+            codigo = 800;
+            descricao = "céu limpo";
+        }
+        
+        WeatherResponse.Weather weather = new WeatherResponse.Weather(codigo, condicao, descricao, "01d");
         WeatherResponse.Weather[] weathers = {weather};
         
-        WeatherResponse.Main main = new WeatherResponse.Main(20.0, 65);
-        WeatherResponse.Wind wind = new WeatherResponse.Wind(5.0, 0);
-        WeatherResponse.Clouds clouds = new WeatherResponse.Clouds(10);
+        WeatherResponse.Main main = new WeatherResponse.Main(22.0, 70);
+        WeatherResponse.Wind wind = new WeatherResponse.Wind(3.0, 0);
+        WeatherResponse.Clouds clouds = new WeatherResponse.Clouds(20);
         
         return new WeatherResponse(weathers, main, wind, null, null, clouds);
+    }
+    
+    /**
+     * Método para testar a API manualmente
+     */
+    public void testarApi() {
+        System.out.println("\n🧪 TESTANDO CONEXÃO COM OPENWEATHERMAP");
+        try {
+            WeatherResponse response = getWeatherWithRetry(-23.5505, -46.6333);
+            if (response != null) {
+                System.out.println("✅ CONEXÃO BEM-SUCEDIDA!");
+                System.out.println("Clima: " + response.weather()[0].description());
+                System.out.println("Temperatura: " + response.main().temp() + "°C");
+            }
+        } catch (Exception e) {
+            System.err.println("❌ FALHA NO TESTE: " + e.getMessage());
+        }
+        System.out.println("====================================\n");
     }
 }

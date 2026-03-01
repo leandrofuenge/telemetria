@@ -7,9 +7,9 @@ import com.app.telemetria.repository.AlertaRepository;
 import com.app.telemetria.repository.VeiculoRepository;
 import com.app.telemetria.repository.ViagemRepository;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -17,6 +17,8 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import java.time.LocalDateTime;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -49,6 +51,100 @@ public class AlertaService {
         this.viagemRepository = viagemRepository;
         this.locationClassifierService = locationClassifierService;
         this.messagingTemplate = messagingTemplate;
+    }
+    
+    // ================ MÉTODOS PARA O CONTROLLER ================
+    
+    @Transactional(readOnly = true)
+    public Page<Alerta> listarTodos(Pageable pageable) {
+        return alertaRepository.findAll(pageable);
+    }
+    
+    @Transactional(readOnly = true)
+    public List<Alerta> listarAtivos() {
+        return alertaRepository.findByResolvidoFalseOrderByDataHoraDesc();
+    }
+    
+    @Transactional(readOnly = true)
+    public List<Alerta> listarPorVeiculo(Long veiculoId) {
+        Veiculo veiculo = veiculoRepository.findById(veiculoId)
+            .orElseThrow(() -> new RuntimeException("Veículo não encontrado"));
+        return alertaRepository.findByVeiculoOrderByDataHoraDesc(veiculo);
+    }
+    
+    @Transactional(readOnly = true)
+    public List<Alerta> listarPorMotorista(Long motoristaId) {
+        return alertaRepository.findByMotoristaIdOrderByDataHoraDesc(motoristaId);
+    }
+    
+    @Transactional(readOnly = true)
+    public List<Alerta> listarPorViagem(Long viagemId) {
+        Viagem viagem = viagemRepository.findById(viagemId)
+            .orElseThrow(() -> new RuntimeException("Viagem não encontrada"));
+        return alertaRepository.findByViagemOrderByDataHoraDesc(viagem);
+    }
+    
+    @Transactional(readOnly = true)
+    public Map<String, Object> dashboard() {
+        Map<String, Object> dashboard = new HashMap<>();
+        
+        // Total de alertas ativos
+        List<Alerta> alertasAtivos = alertaRepository.findByResolvidoFalseOrderByDataHoraDesc();
+        dashboard.put("totalAtivos", alertasAtivos.size());
+        
+        // Alertas por gravidade
+        long altaGravidade = alertasAtivos.stream()
+            .filter(a -> GravidadeAlerta.ALTA.name().equals(a.getGravidade()))
+            .count();
+        long mediaGravidade = alertasAtivos.stream()
+            .filter(a -> GravidadeAlerta.MEDIA.name().equals(a.getGravidade()))
+            .count();
+        long baixaGravidade = alertasAtivos.stream()
+            .filter(a -> GravidadeAlerta.BAIXA.name().equals(a.getGravidade()))
+            .count();
+        
+        dashboard.put("altaGravidade", altaGravidade);
+        dashboard.put("mediaGravidade", mediaGravidade);
+        dashboard.put("baixaGravidade", baixaGravidade);
+        
+        // Alertas por tipo
+        Map<String, Long> alertasPorTipo = new HashMap<>();
+        for (TipoAlerta tipo : TipoAlerta.values()) {
+            long count = alertasAtivos.stream()
+                .filter(a -> tipo.name().equals(a.getTipo()))
+                .count();
+            if (count > 0) {
+                alertasPorTipo.put(tipo.name(), count);
+            }
+        }
+        dashboard.put("alertasPorTipo", alertasPorTipo);
+        
+        // Últimos 10 alertas
+        dashboard.put("ultimosAlertas", alertasAtivos.stream().limit(10).toList());
+        
+        return dashboard;
+    }
+    
+    @Transactional
+    public Alerta marcarComoLido(Long id) {
+        Alerta alerta = alertaRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Alerta não encontrado"));
+        alerta.setLido(true);
+        return alertaRepository.save(alerta);
+    }
+    
+    @Transactional
+    public Alerta resolverAlerta(Long id) {
+        Alerta alerta = alertaRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Alerta não encontrado"));
+        alerta.setResolvido(true);
+        alerta.setDataHoraResolucao(LocalDateTime.now());
+        return alertaRepository.save(alerta);
+    }
+    
+    @Transactional(readOnly = true)
+    public List<Alerta> listarPorPeriodo(LocalDateTime inicio, LocalDateTime fim) {
+        return alertaRepository.findByDataHoraBetweenOrderByDataHoraDesc(inicio, fim);
     }
     
     // ================ ALERTAS DE VELOCIDADE ================
@@ -360,7 +456,7 @@ public class AlertaService {
         });
     }
     
-    // ================ MÉTODOS AUXILIARES (mantidos iguais) ================
+    // ================ MÉTODOS AUXILIARES ================
     
     private void criarAlerta(Veiculo veiculo, Motorista motorista, Viagem viagem,
                              String tipo, String gravidade, String mensagem,
@@ -427,7 +523,7 @@ public class AlertaService {
     	
     	if (urbana) {
     		
-    		String mensagem = "Veiculo" + placaVeiculo + "entrou em area urbana";
+    		String mensagem = "Veiculo " + placaVeiculo + " entrou em area urbana";
     		
     		// salvar no banco 
     		

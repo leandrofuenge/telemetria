@@ -3,6 +3,7 @@ package com.app.telemetria.controller;
 import com.app.telemetria.entity.Alerta;
 import com.app.telemetria.entity.Veiculo;
 import com.app.telemetria.repository.AlertaRepository;
+import com.app.telemetria.service.AlertaService;
 import com.app.telemetria.service.VeiculoService;
 import com.app.telemetria.exception.ErrorCode;
 import com.app.telemetria.exception.BusinessException;
@@ -15,92 +16,63 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/alertas")
+@RequestMapping("/api/v1/alertas")
 public class AlertaController {
-    
-    private final AlertaRepository alertaRepository;
-    private final VeiculoService veiculoService;
-    
-    public AlertaController(AlertaRepository alertaRepository, VeiculoService veiculoService) {
-        this.alertaRepository = alertaRepository;
-        this.veiculoService = veiculoService;
+
+    private final AlertaService alertaService;
+
+    public AlertaController(AlertaService alertaService) {
+        this.alertaService = alertaService;
     }
-    
+
     @GetMapping
     public Page<Alerta> listarTodos(Pageable pageable) {
-        return alertaRepository.findAll(pageable);
+        return alertaService.listarTodos(pageable);
     }
-    
+
     @GetMapping("/ativos")
     public List<Alerta> listarAtivos() {
-        return alertaRepository.findByResolvidoFalseOrderByDataHoraDesc();
+        return alertaService.listarAtivos();
     }
-    
+
     @GetMapping("/veiculo/{veiculoId}")
     public List<Alerta> listarPorVeiculo(@PathVariable Long veiculoId) {
-
-        veiculoService.buscarPorId(veiculoId);
-        
-        Veiculo veiculo = new Veiculo();
-        veiculo.setId(veiculoId);
-        return alertaRepository.findByVeiculoOrderByDataHoraDesc(veiculo);
+        return alertaService.listarPorVeiculo(veiculoId);
     }
-    
+
     @GetMapping("/motorista/{motoristaId}")
     public List<Alerta> listarPorMotorista(@PathVariable Long motoristaId) {
-        return alertaRepository.findByMotoristaIdOrderByDataHoraDesc(motoristaId);
+        return alertaService.listarPorMotorista(motoristaId);
     }
-    
+
     @GetMapping("/viagem/{viagemId}")
     public List<Alerta> listarPorViagem(@PathVariable Long viagemId) {
-        return alertaRepository.findByViagemIdOrderByDataHoraDesc(viagemId);
+        return alertaService.listarPorViagem(viagemId);
     }
-    
+
     @GetMapping("/dashboard")
     public Map<String, Object> dashboard() {
-        return Map.of(
-            "totalAlertasNaoLidos", alertaRepository.countByResolvidoFalse(),
-            "alertasCriticos", alertaRepository.countByGravidadeAndResolvidoFalse("CRITICA"),
-            "alertasAltos", alertaRepository.countByGravidadeAndResolvidoFalse("ALTA"),
-            "alertasMedios", alertaRepository.countByGravidadeAndResolvidoFalse("MEDIA"),
-            "alertasBaixos", alertaRepository.countByGravidadeAndResolvidoFalse("BAIXA")
-        );
+        return alertaService.dashboard();
     }
-    
+
     @PutMapping("/{id}/ler")
     public Alerta marcarComoLido(@PathVariable Long id) {
-        Alerta alerta = alertaRepository.findById(id)
-            .orElseThrow(() -> new BusinessException(
-                ErrorCode.ALERTA_NOT_FOUND,
-                id.toString()
-            ));
-        alerta.setLido(true);
-        alerta.setDataHoraLeitura(LocalDateTime.now());
-        return alertaRepository.save(alerta);
+        return alertaService.marcarComoLido(id);
     }
-    
+
     @PutMapping("/{id}/resolver")
     public Alerta resolverAlerta(@PathVariable Long id) {
-        Alerta alerta = alertaRepository.findById(id)
-            .orElseThrow(() -> new BusinessException(
-                ErrorCode.ALERTA_NOT_FOUND,
-                id.toString()
-            ));
-        alerta.setResolvido(true);
-        alerta.setDataHoraResolucao(LocalDateTime.now());
-        return alertaRepository.save(alerta);
+        return alertaService.resolverAlerta(id);
     }
-    
+
     @GetMapping("/periodo")
     public List<Alerta> listarPorPeriodo(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime inicio,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fim) {
-        
-        if (inicio.isAfter(fim)) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
-                "Data de início não pode ser posterior à data de fim");
-        }
-        
-        return alertaRepository.findByPeriodo(inicio, fim);
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime inicio,
+
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime fim) {
+
+        return alertaService.listarPorPeriodo(inicio, fim);
     }
 }
