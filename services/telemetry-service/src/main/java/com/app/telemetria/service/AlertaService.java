@@ -6,6 +6,10 @@ import com.app.telemetria.enums.GravidadeAlerta;
 import com.app.telemetria.repository.AlertaRepository;
 import com.app.telemetria.repository.VeiculoRepository;
 import com.app.telemetria.repository.ViagemRepository;
+import com.app.telemetria.client.RoutingClient;
+import com.app.telemetria.dto.RouteResponse;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -30,7 +34,7 @@ public class AlertaService {
     private final ViagemRepository viagemRepository;
     private final LocationClassifierService locationClassifierService;
     private final SimpMessagingTemplate messagingTemplate;
-
+    private final RoutingClient routingClient;
     
     // Configurações
     private static final double VELOCIDADE_MAXIMA = 110.0; // km/h
@@ -44,13 +48,15 @@ public class AlertaService {
             VeiculoRepository veiculoRepository,
             ViagemRepository viagemRepository,
             LocationClassifierService locationClassifierService,
-            SimpMessagingTemplate messagingTemplate) {
+            SimpMessagingTemplate messagingTemplate,
+            RoutingClient routingClient) {
     	
         this.alertaRepository = alertaRepository;
         this.veiculoRepository = veiculoRepository;
         this.viagemRepository = viagemRepository;
         this.locationClassifierService = locationClassifierService;
         this.messagingTemplate = messagingTemplate;
+        this.routingClient = routingClient;
     }
     
     // ================ MÉTODOS PARA O CONTROLLER ================
@@ -283,24 +289,41 @@ public class AlertaService {
     }
     
     @Transactional
-    public void verificarAtrasoViagem(Viagem viagem, Telemetria ultimaTelemetria) {
-        if (viagem == null || viagem.getDataChegadaPrevista() == null) return;
-        
-        LocalDateTime agora = LocalDateTime.now();
-        if (agora.isAfter(viagem.getDataChegadaPrevista())) {
-            long minutosAtraso = Duration.between(viagem.getDataChegadaPrevista(), agora).toMinutes();
-            
+    public void verificarAtrasoViagemInteligente(Viagem viagem, Telemetria ultimaTelemetria) {
+
+        if (viagem == null || ultimaTelemetria == null) return;
+
+        RouteResponse rota = routingClient.calcular(
+                ultimaTelemetria.getLatitude(),
+                ultimaTelemetria.getLongitude(),
+                viagem.getRota().getLatitudeDestino(),
+                viagem.getRota().getLongitudeDestino()
+        );
+
+        if (rota == null) return;
+
+        double minutosRestantes = rota.getDuracaoMinutos();
+
+        LocalDateTime etaReal = LocalDateTime.now()
+                .plusMinutes((long) minutosRestantes);
+
+        if (etaReal.isAfter(viagem.getDataChegadaPrevista())) {
+
+            long atrasoReal =
+                    Duration.between(viagem.getDataChegadaPrevista(), etaReal)
+                            .toMinutes();
+
             criarAlerta(
-                viagem.getVeiculo(),
-                viagem.getMotorista(),
-                viagem,
-                TipoAlerta.ATRASO_VIAGEM.name(),
-                GravidadeAlerta.MEDIA.name(),
-                String.format("Viagem com atraso de %d minutos", minutosAtraso),
-                ultimaTelemetria != null ? ultimaTelemetria.getLatitude() : null,
-                ultimaTelemetria != null ? ultimaTelemetria.getLongitude() : null,
-                ultimaTelemetria != null ? ultimaTelemetria.getVelocidade() : null,
-                ultimaTelemetria != null ? ultimaTelemetria.getOdometro() : null
+                    viagem.getVeiculo(),
+                    viagem.getMotorista(),
+                    viagem,
+                    TipoAlerta.ATRASO_VIAGEM.name(),
+                    GravidadeAlerta.ALTA.name(),
+                    "Atraso real estimado: " + atrasoReal + " minutos",
+                    ultimaTelemetria.getLatitude(),
+                    ultimaTelemetria.getLongitude(),
+                    ultimaTelemetria.getVelocidade(),
+                    ultimaTelemetria.getOdometro()
             );
         }
     }
@@ -419,7 +442,7 @@ public class AlertaService {
             
             if (viagemAtiva != null) {
                 verificarTempoDirecao(viagemAtiva, telemetria);
-                verificarAtrasoViagem(viagemAtiva, telemetria);
+                verificarAtrasoViagemInteligente(viagemAtiva, telemetria);
             }
             
             // Atualizar status de alertas resolvidos

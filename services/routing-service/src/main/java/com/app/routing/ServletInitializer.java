@@ -1,4 +1,4 @@
-package com.fleet.routing;
+package com.app.routing;
 
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;

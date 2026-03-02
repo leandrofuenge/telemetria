@@ -11,7 +11,7 @@
 	<groupId>com.fleet</groupId>
 	<artifactId>routing-service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<packaging>war</packaging>
+	<packaging>jar</packaging>
 	<name>routing-service</name>
 	<description>Microserviço de roteamento para a plataforma de telemetria de frotas</description>
 	<url/>
@@ -54,6 +54,26 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		
+		<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-webflux</artifactId>
+</dependency>
+		
+		<!-- Source: https://mvnrepository.com/artifact/org.springframework/spring-webflux -->
+<dependency>
+    <groupId>org.springframework</groupId>
+    <artifactId>spring-webflux</artifactId>
+    <scope>compile</scope>
+</dependency>
+		
+		<!-- Source: https://mvnrepository.com/artifact/org.projectlombok/lombok -->
+<dependency>
+    <groupId>org.projectlombok</groupId>
+    <artifactId>lombok</artifactId>
+    <scope>compile</scope>
+</dependency>
+		
 	</dependencies>
 
 	<build>
